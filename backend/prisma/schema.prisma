@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  COMMITTEE_VIEWER
+  COMMITTEE_EDITOR
+}
+
+enum PaymentMode {
+  CASH
+  ONLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REVERSED
+}
+
+model Masjid {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  name         String
+  address      String?
+  contactPhone String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users                  User[]
+  members                Member[]
+  payments               Payment[]
+  receipts               Receipt[]
+  auditLogs              AuditLog[]
+  otpSessions            OtpSession[]
+  contributionFeeHistory ContributionFeeHistory[]
+}
+
+model ContributionFeeHistory {
+  id            String   @id @default(uuid())
+  masjidId      String
+  monthlyFee    Decimal  @db.Decimal(10, 2)
+  effectiveFrom DateTime
+  createdAt     DateTime @default(now())
+
+  masjid Masjid @relation(fields: [masjidId], references: [id])
+
+  @@map("contribution_fee_history")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  masjidId     String?
+  name         String
+  username     String
+  passwordHash String
+  role         UserRole
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  masjid Masjid? @relation(fields: [masjidId], references: [id])
+
+  recordedPayments Payment[]  @relation("RecordedBy")
+  auditLogs        AuditLog[] @relation("AuditActor")
+
+  @@unique([masjidId, username])
+}
+
+model Member {
+  id                String    @id @default(uuid())
+  masjidId          String
+  memberCode        String
+  name              String
+  phone             String
+  address           String?
+  joinDate          DateTime
+  openingDueBalance Decimal   @default(0) @db.Decimal(10, 2)
+  lastLoginAt       DateTime?
+  active            Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  masjid Masjid @relation(fields: [masjidId], references: [id])
+
+  payments    Payment[]
+  otpSessions OtpSession[]
+
+  @@unique([masjidId, memberCode])
+  @@unique([masjidId, phone])
+}
+
+model Payment {
+  id               String        @id @default(uuid())
+  masjidId         String
+  memberId         String
+  amount           Decimal       @db.Decimal(10, 2)
+  paymentMode      PaymentMode
+  paymentStatus    PaymentStatus
+  paymentDate      DateTime?
+  recordedByUserId String?
+  gatewayOrderId   String?
+  gatewayPaymentId String?
+  note             String?
+  createdAt        DateTime      @default(now())
+
+  masjid         Masjid @relation(fields: [masjidId], references: [id])
+  member         Member @relation(fields: [memberId], references: [id])
+  recordedByUser User?  @relation("RecordedBy", fields: [recordedByUserId], references: [id])
+
+  allocations PaymentAllocation[]
+  receipt     Receipt?
+
+  @@index([memberId])
+}
+
+model PaymentAllocation {
+  id                String   @id @default(uuid())
+  paymentId         String
+  contributionMonth DateTime
+  amountAllocated   Decimal  @db.Decimal(10, 2)
+  createdAt         DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+}
+
+model Receipt {
+  id            String   @id @default(uuid())
+  masjidId      String
+  paymentId     String   @unique
+  receiptNumber String   @unique
+  generatedAt   DateTime @default(now())
+
+  masjid  Masjid  @relation(fields: [masjidId], references: [id])
+  payment Payment @relation(fields: [paymentId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  masjidId   String
+  actorId    String
+  action     String
+  entityType String
+  entityId   String
+  oldValue   Json?
+  newValue   Json?
+  createdAt  DateTime @default(now())
+
+  masjid Masjid @relation(fields: [masjidId], references: [id])
+  actor  User   @relation("AuditActor", fields: [actorId], references: [id])
+}
+
+model OtpSession {
+  id        String   @id @default(uuid())
+  memberId  String
+  masjidId  String
+  phone     String
+  otpHash   String
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id])
+  masjid Masjid @relation(fields: [masjidId], references: [id])
+
+  @@unique([masjidId, phone])
+}
