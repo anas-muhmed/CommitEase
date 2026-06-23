@@ -1,6 +1,5 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -85,6 +84,7 @@ model Member {
   address           String?
   joinDate          DateTime
   openingDueBalance Decimal   @default(0) @db.Decimal(10, 2)
+  appActivated      Boolean   @default(false)
   lastLoginAt       DateTime?
   active            Boolean   @default(true)
   createdAt         DateTime  @default(now())
@@ -160,14 +160,17 @@ model AuditLog {
 }
 
 model OtpSession {
-  id        String   @id @default(uuid())
-  memberId  String
-  masjidId  String
-  phone     String
-  otpHash   String
-  expiresAt DateTime
-  verified  Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id           String    @id @default(uuid())
+  memberId     String
+  masjidId     String
+  phone        String
+  otpHash      String
+  expiresAt    DateTime
+  verified     Boolean   @default(false)
+  attemptCount Int       @default(0)
+  blockedUntil DateTime?
+  lastSentAt   DateTime  @default(now())
+  createdAt    DateTime  @default(now())
 
   member Member @relation(fields: [memberId], references: [id])
   masjid Masjid @relation(fields: [masjidId], references: [id])
