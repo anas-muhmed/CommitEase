@@ -262,6 +262,35 @@ export async function refreshMemberToken(token: string) {
   };
 }
 
+// ─── Password change ─────────────────────────────────────────────────────────
+
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  if (newPassword.length < 8) throw new ApiError(400, 'New password must be at least 8 characters.');
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true, active: true },
+  });
+  if (!user || !user.active) throw new ApiError(404, 'User not found.');
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) throw new ApiError(401, 'Current password is incorrect.');
+
+  if (currentPassword === newPassword) {
+    throw new ApiError(400, 'New password must differ from the current password.');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, OTP_BCRYPT_ROUNDS);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash, mustChangePassword: false },
+  });
+}
+
 // ─── Device-Trust Architecture (Planned — Phase 5) ───────────────────────────
 //
 // Current: member refresh tokens are stateless 30-day JWTs. Logout clears the

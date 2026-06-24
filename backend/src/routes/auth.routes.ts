@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { otpRateLimiter } from '../middleware/rateLimiter';
+import { authenticate } from '../middleware/authenticate';
 import * as AuthController from '../controllers/auth.controller';
 
 const router = Router();
@@ -8,6 +9,8 @@ const router = Router();
 router.post('/committee/login', AuthController.committeeLogin);
 router.post('/committee/refresh', AuthController.committeeRefresh);
 router.post('/committee/logout', AuthController.committeeLogout);
+// Intentionally NOT behind requirePasswordChange — this is the route that clears the flag.
+router.patch('/committee/change-password', authenticate, AuthController.changePassword);
 
 // Member — OTP request is rate-limited (5 requests per 10 min per IP in Phase 3)
 router.post('/member/request-otp', otpRateLimiter, AuthController.requestOtp);

@@ -111,7 +111,7 @@ model Member {
   name              String
   phone             String
   address           String?
-  joinDate          DateTime
+  contributionStartDate DateTime
   openingDueBalance Decimal   @default(0) @db.Decimal(10, 2)
   appActivated      Boolean   @default(false)
   lastLoginAt       DateTime?

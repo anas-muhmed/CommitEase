@@ -96,3 +96,15 @@ export const memberLogout: RequestHandler = (_req, res) => {
   res.clearCookie(MEMBER_REFRESH_COOKIE, clearCookieOptions());
   sendSuccess(res, null, 'Logged out.');
 };
+
+// ─── Password change ──────────────────────────────────────────────────────────
+
+export const changePassword: RequestHandler = async (req, res) => {
+  const body = req.body as Record<string, unknown>;
+  await AuthService.changePassword(
+    req.user!.id,
+    requireString(body, 'currentPassword'),
+    requireString(body, 'newPassword'),
+  );
+  sendSuccess(res, null, 'Password changed successfully.');
+};

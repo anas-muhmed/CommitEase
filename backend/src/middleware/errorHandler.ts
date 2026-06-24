@@ -5,11 +5,9 @@ import { env } from '../config/env';
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof ApiError) {
-    res.status(err.statusCode).json({
-      success: false,
-      message: err.message,
-      data: null,
-    });
+    const body: Record<string, unknown> = { success: false, message: err.message, data: null };
+    if (err.details !== undefined) body['details'] = err.details;
+    res.status(err.statusCode).json(body);
     return;
   }
 
