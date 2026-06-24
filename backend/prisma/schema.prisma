@@ -9,8 +9,19 @@ datasource db {
 
 enum UserRole {
   SUPER_ADMIN
-  COMMITTEE_VIEWER
-  COMMITTEE_EDITOR
+  COMMITTEE_ADMIN
+}
+
+enum MasjidStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum SignupRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum PaymentMode {
@@ -26,14 +37,14 @@ enum PaymentStatus {
 }
 
 model Masjid {
-  id           String   @id @default(uuid())
-  code         String   @unique
+  id           String       @id @default(uuid())
+  code         String       @unique
   name         String
   address      String?
   contactPhone String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  status       MasjidStatus @default(PENDING)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   users                  User[]
   members                Member[]
@@ -42,6 +53,22 @@ model Masjid {
   auditLogs              AuditLog[]
   otpSessions            OtpSession[]
   contributionFeeHistory ContributionFeeHistory[]
+}
+
+model MasjidSignupRequest {
+  id            String             @id @default(uuid())
+  masjidName    String
+  location      String
+  applicantName String
+  phone         String
+  notes         String?
+  status        SignupRequestStatus @default(PENDING)
+  rejectionNote String?
+  reviewedAt    DateTime?
+  reviewedById  String?
+  createdAt     DateTime           @default(now())
+
+  reviewedBy User? @relation(fields: [reviewedById], references: [id])
 }
 
 model ContributionFeeHistory {
@@ -57,20 +84,22 @@ model ContributionFeeHistory {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  masjidId     String?
-  name         String
-  username     String
-  passwordHash String
-  role         UserRole
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  masjidId           String?
+  name               String
+  username           String
+  passwordHash       String
+  role               UserRole
+  active             Boolean  @default(true)
+  mustChangePassword Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   masjid Masjid? @relation(fields: [masjidId], references: [id])
 
-  recordedPayments Payment[]  @relation("RecordedBy")
-  auditLogs        AuditLog[] @relation("AuditActor")
+  recordedPayments       Payment[]            @relation("RecordedBy")
+  auditLogs              AuditLog[]           @relation("AuditActor")
+  reviewedSignupRequests MasjidSignupRequest[]
 
   @@unique([masjidId, username])
 }

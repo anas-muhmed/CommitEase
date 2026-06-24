@@ -42,9 +42,9 @@ export const committeeLogin: RequestHandler = async (req, res) => {
   const username = requireString(body, 'username');
   const password = requireString(body, 'password');
 
-  const { accessToken, refreshToken } = await AuthService.committeeLogin(masjidCode, username, password);
+  const { accessToken, refreshToken, mustChangePassword } = await AuthService.committeeLogin(masjidCode, username, password);
   res.cookie(COMMITTEE_REFRESH_COOKIE, refreshToken, refreshCookieOptions());
-  sendSuccess(res, { accessToken }, 'Login successful.');
+  sendSuccess(res, { accessToken, mustChangePassword }, 'Login successful.');
 };
 
 export const committeeRefresh: RequestHandler = async (req, res) => {

@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { Prisma } from '@prisma/client';
+import { Prisma, MasjidStatus } from '@prisma/client';
 import type { UserRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
@@ -72,7 +72,7 @@ function verifyRefreshToken(token: string): RefreshPayload {
 
 export async function committeeLogin(masjidCode: string, username: string, password: string) {
   const masjid = await prisma.masjid.findUnique({ where: { code: masjidCode } });
-  if (!masjid || !masjid.active) {
+  if (!masjid || masjid.status !== MasjidStatus.ACTIVE) {
     logger.warn('auth.committee.login.failure', { masjidCode, username, reason: 'masjid_not_found' });
     throw new ApiError(401, 'Invalid credentials.');
   }
@@ -104,6 +104,7 @@ export async function committeeLogin(masjidCode: string, username: string, passw
   return {
     accessToken: signAccessToken({ sub: user.id, masjidId: user.masjidId, role: user.role, type: 'user' }),
     refreshToken: signRefreshToken(user.id, 'user'),
+    mustChangePassword: user.mustChangePassword,
   };
 }
 
@@ -125,7 +126,7 @@ export async function refreshCommitteeToken(token: string) {
 
 export async function requestMemberOtp(masjidCode: string, phone: string) {
   const masjid = await prisma.masjid.findUnique({ where: { code: masjidCode } });
-  if (!masjid || !masjid.active) throw new ApiError(404, 'Masjid not found.');
+  if (!masjid || masjid.status !== MasjidStatus.ACTIVE) throw new ApiError(404, 'Masjid not found.');
 
   const member = await prisma.member.findUnique({
     where: { masjidId_phone: { masjidId: masjid.id, phone } },
@@ -167,7 +168,7 @@ export async function requestMemberOtp(masjidCode: string, phone: string) {
 
 export async function verifyMemberOtp(masjidCode: string, phone: string, otp: string) {
   const masjid = await prisma.masjid.findUnique({ where: { code: masjidCode } });
-  if (!masjid || !masjid.active) {
+  if (!masjid || masjid.status !== MasjidStatus.ACTIVE) {
     logger.warn('auth.member.otp.verify.failure', { masjidCode, phone: maskPhone(phone), reason: 'masjid_not_found' });
     throw new ApiError(401, 'Invalid OTP.');
   }

@@ -6,6 +6,8 @@ import { requestLogger } from './middleware/requestLogger';
 import { notFound } from './middleware/notFound';
 import { errorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth.routes';
+import masjidRoutes from './routes/masjid.routes';
+import publicRoutes from './routes/public.routes';
 
 const app = express();
 
@@ -24,6 +26,8 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/masjids', masjidRoutes);
+app.use('/api/v1/public', publicRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

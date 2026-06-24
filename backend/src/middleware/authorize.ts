@@ -2,7 +2,7 @@ import type { RequestHandler } from 'express';
 import type { UserRole } from '@prisma/client';
 import { ApiError } from '../utils/ApiError';
 
-// Usage: router.get('/members', authenticate, authorize('COMMITTEE_VIEWER', 'COMMITTEE_EDITOR'), handler)
+// Usage: router.get('/members', authenticate, authorize('COMMITTEE_ADMIN'), handler)
 export function authorize(...roles: UserRole[]): RequestHandler {
   return (req, _res, next) => {
     if (!req.user) {

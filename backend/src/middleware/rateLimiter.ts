@@ -14,7 +14,13 @@ export function createRateLimiter(_options: RateLimitOptions): RequestHandler {
 }
 
 export const otpRateLimiter = createRateLimiter({
-  windowMs: 10 * 60 * 1000, // 10-minute window
-  max: 5,                    // 5 OTP requests per window per IP
+  windowMs: 10 * 60 * 1000,
+  max: 5,
   message: 'Too many OTP requests. Please wait before trying again.',
+});
+
+export const signupRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000, // 1-hour window
+  max: 5,                    // 5 signup attempts per IP per hour
+  message: 'Too many signup attempts. Please try again later.',
 });
