@@ -67,6 +67,11 @@ export async function createMasjid(
       select: { id: true, name: true, username: true, role: true, mustChangePassword: true },
     });
 
+    // Every new masjid gets one default plan so onboarding works without extra config.
+    await tx.contributionPlan.create({
+      data: { masjidId: masjid.id, name: 'General Member', active: true },
+    });
+
     await logAudit({ masjidId: masjid.id, actorId, action: 'MASJID_CREATED', entityType: 'Masjid', entityId: masjid.id,
       newValue: { code: masjid.code, name: masjid.name, status: masjid.status } }, tx);
 
@@ -295,6 +300,10 @@ export async function approveSignupRequest(
         mustChangePassword: true,
       },
       select: { id: true, name: true, username: true, role: true, mustChangePassword: true },
+    });
+
+    await tx.contributionPlan.create({
+      data: { masjidId: masjid.id, name: 'General Member', active: true },
     });
 
     await tx.masjidSignupRequest.update({

@@ -46,13 +46,13 @@ model Masjid {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  users                  User[]
-  members                Member[]
-  payments               Payment[]
-  receipts               Receipt[]
-  auditLogs              AuditLog[]
-  otpSessions            OtpSession[]
-  contributionFeeHistory ContributionFeeHistory[]
+  users               User[]
+  members             Member[]
+  contributionPlans   ContributionPlan[]
+  payments            Payment[]
+  receipts            Receipt[]
+  auditLogs           AuditLog[]
+  otpSessions         OtpSession[]
 }
 
 model MasjidSignupRequest {
@@ -71,14 +71,33 @@ model MasjidSignupRequest {
   reviewedBy User? @relation(fields: [reviewedById], references: [id])
 }
 
-model ContributionFeeHistory {
-  id            String   @id @default(uuid())
-  masjidId      String
-  monthlyFee    Decimal  @db.Decimal(10, 2)
-  effectiveFrom DateTime
-  createdAt     DateTime @default(now())
+// One plan per fee tier within a masjid (e.g. "General Member", "Chelav").
+// Formerly a single per-masjid fee; now scoped to plans so rates vary by category.
+model ContributionPlan {
+  id          String   @id @default(uuid())
+  masjidId    String
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  masjid Masjid @relation(fields: [masjidId], references: [id])
+  masjid            Masjid                   @relation(fields: [masjidId], references: [id])
+  members           Member[]
+  feeHistory        ContributionFeeHistory[]
+  memberPlanHistory MemberPlanHistory[]
+
+  @@unique([masjidId, name])
+}
+
+model ContributionFeeHistory {
+  id                 String   @id @default(uuid())
+  contributionPlanId String
+  monthlyFee         Decimal  @db.Decimal(10, 2)
+  effectiveFrom      DateTime
+  createdAt          DateTime @default(now())
+
+  contributionPlan ContributionPlan @relation(fields: [contributionPlanId], references: [id])
 
   @@map("contribution_fee_history")
 }
@@ -105,27 +124,44 @@ model User {
 }
 
 model Member {
-  id                String    @id @default(uuid())
-  masjidId          String
-  memberCode        String
-  name              String
-  phone             String
-  address           String?
+  id                    String    @id @default(uuid())
+  masjidId              String
+  memberCode            String
+  name                  String
+  phone                 String
+  address               String?
   contributionStartDate DateTime
-  openingDueBalance Decimal   @default(0) @db.Decimal(10, 2)
-  appActivated      Boolean   @default(false)
-  lastLoginAt       DateTime?
-  active            Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  contributionPlanId    String
+  openingDueBalance     Decimal   @default(0) @db.Decimal(10, 2)
+  appActivated          Boolean   @default(false)
+  lastLoginAt           DateTime?
+  active                Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  masjid Masjid @relation(fields: [masjidId], references: [id])
+  masjid           Masjid           @relation(fields: [masjidId], references: [id])
+  contributionPlan ContributionPlan @relation(fields: [contributionPlanId], references: [id])
 
-  payments    Payment[]
-  otpSessions OtpSession[]
+  payments          Payment[]
+  otpSessions       OtpSession[]
+  memberPlanHistory MemberPlanHistory[]
 
   @@unique([masjidId, memberCode])
   @@unique([masjidId, phone])
+}
+
+// Immutable log of which plan a member was on and from when.
+// The due engine uses this to freeze the correct fee rate per month when
+// a member switches plans — historical unpaid months never inherit the new rate.
+model MemberPlanHistory {
+  id                 String   @id @default(uuid())
+  memberId           String
+  contributionPlanId String
+  effectiveFrom      DateTime
+  createdAt          DateTime @default(now())
+
+  member           Member           @relation(fields: [memberId], references: [id])
+  contributionPlan ContributionPlan @relation(fields: [contributionPlanId], references: [id])
 }
 
 model Payment {
@@ -166,11 +202,14 @@ model Receipt {
   id            String   @id @default(uuid())
   masjidId      String
   paymentId     String   @unique
-  receiptNumber String   @unique
+  receiptNumber String
   generatedAt   DateTime @default(now())
 
   masjid  Masjid  @relation(fields: [masjidId], references: [id])
   payment Payment @relation(fields: [paymentId], references: [id])
+
+  // Per-masjid sequential receipt numbers (RCP-0001 for masjid A can coexist with RCP-0001 for masjid B).
+  @@unique([masjidId, receiptNumber])
 }
 
 model AuditLog {

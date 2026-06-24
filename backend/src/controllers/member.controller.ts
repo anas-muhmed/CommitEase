@@ -1,6 +1,5 @@
 import type { RequestHandler } from 'express';
 import * as MemberService from '../services/member.service';
-import * as FeeService from '../services/fee.service';
 import { sendSuccess } from '../utils/response';
 import { ApiError } from '../utils/ApiError';
 
@@ -27,7 +26,6 @@ function optionalNumber(body: Record<string, unknown>, field: string): number | 
   return num;
 }
 
-// Express 5 types params as string | string[] — take the scalar value.
 function param(req: Parameters<RequestHandler>[0], name: string): string {
   const val = req.params[name];
   if (!val) throw new ApiError(400, `Missing route parameter: ${name}`);
@@ -60,6 +58,7 @@ export const createMember: RequestHandler = async (req, res) => {
   const memberCode = optionalString(body, 'memberCode');
   const address = optionalString(body, 'address');
   const openingDueBalance = optionalNumber(body, 'openingDueBalance');
+  const contributionPlanId = optionalString(body, 'contributionPlanId');
 
   const member = await MemberService.createMember(masjidId, req.user!.id, {
     name: requireString(body, 'name'),
@@ -68,6 +67,7 @@ export const createMember: RequestHandler = async (req, res) => {
     ...(memberCode !== undefined && { memberCode }),
     ...(address !== undefined && { address }),
     ...(openingDueBalance !== undefined && { openingDueBalance }),
+    ...(contributionPlanId !== undefined && { contributionPlanId }),
   });
 
   sendSuccess(res, member, 'Member created.', 201);
@@ -129,24 +129,33 @@ export const bulkImport: RequestHandler = async (req, res) => {
   sendSuccess(res, result, message, result.created > 0 ? 201 : 200);
 };
 
-// ─── Fee handlers ─────────────────────────────────────────────────────────────
+// ─── Ledger and payments ──────────────────────────────────────────────────────
 
-export const setFee: RequestHandler = async (req, res) => {
-  const body = req.body as Record<string, unknown>;
-  const masjidId = req.user!.masjidId!;
-
-  const monthlyFee = optionalNumber(body, 'monthlyFee');
-  if (monthlyFee === undefined) throw new ApiError(400, 'monthlyFee is required.');
-
-  const result = await FeeService.setFee(masjidId, req.user!.id, {
-    monthlyFee,
-    effectiveFrom: requireString(body, 'effectiveFrom'),
-  });
-
-  sendSuccess(res, result, 'Contribution fee updated.', 201);
+export const getLedger: RequestHandler = async (req, res) => {
+  const result = await MemberService.getLedger(req.user!.masjidId!, param(req, 'memberId'));
+  sendSuccess(res, result);
 };
 
-export const getFeeHistory: RequestHandler = async (req, res) => {
-  const result = await FeeService.getFeeHistory(req.user!.masjidId!);
+export const recordPayment: RequestHandler = async (req, res) => {
+  const body = req.body as Record<string, unknown>;
+  const masjidId = req.user!.masjidId!;
+  const memberId = param(req, 'memberId');
+
+  const amount = optionalNumber(body, 'amount');
+  if (amount === undefined) throw new ApiError(400, 'amount is required.');
+
+  const note = optionalString(body, 'note');
+
+  const result = await MemberService.recordPayment(masjidId, memberId, req.user!.id, {
+    amount,
+    paymentDate: requireString(body, 'paymentDate'),
+    ...(note !== undefined && { note }),
+  });
+
+  sendSuccess(res, result, `Payment recorded. Receipt ${result.receipt.receiptNumber} issued.`, 201);
+};
+
+export const getPaymentHistory: RequestHandler = async (req, res) => {
+  const result = await MemberService.getPaymentHistory(req.user!.masjidId!, param(req, 'memberId'));
   sendSuccess(res, result);
 };
