@@ -6,6 +6,7 @@ import { requirePasswordChange } from '../middleware/requirePasswordChange';
 import * as MemberController from '../controllers/member.controller';
 import * as PlanController from '../controllers/plan.controller';
 import * as PaymentController from '../controllers/payment.controller';
+import * as DashboardController from '../controllers/dashboard.controller';
 
 const router = Router();
 const committee = [authenticate, requireActiveMasjid, requirePasswordChange];
@@ -14,6 +15,11 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
 });
+
+// ─── Dashboard and reports ────────────────────────────────────────────────────
+router.get('/dashboard', committee, DashboardController.getDashboard);
+router.get('/reports/collection', committee, DashboardController.getCollectionReport);
+router.get('/reports/overdue', committee, DashboardController.getOverdueReport);
 
 // ─── Contribution plans (Member Types) ───────────────────────────────────────
 router.get('/plans', committee, PlanController.listPlans);
