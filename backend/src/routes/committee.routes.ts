@@ -5,6 +5,7 @@ import { requireActiveMasjid } from '../middleware/requireActiveMasjid';
 import { requirePasswordChange } from '../middleware/requirePasswordChange';
 import * as MemberController from '../controllers/member.controller';
 import * as PlanController from '../controllers/plan.controller';
+import * as PaymentController from '../controllers/payment.controller';
 
 const router = Router();
 const committee = [authenticate, requireActiveMasjid, requirePasswordChange];
@@ -38,5 +39,9 @@ router.patch('/members/:memberId/plan', committee, PlanController.switchMemberPl
 router.get('/members/:memberId/ledger', committee, MemberController.getLedger);
 router.post('/members/:memberId/payments', committee, MemberController.recordPayment);
 router.get('/members/:memberId/payments', committee, MemberController.getPaymentHistory);
+
+// Payment integrity — reversal and transfer (both require reason; transfer validates same-masjid).
+router.post('/members/:memberId/payments/:paymentId/reverse', committee, PaymentController.reversePayment);
+router.post('/members/:memberId/payments/:paymentId/transfer', committee, PaymentController.transferPayment);
 
 export default router;

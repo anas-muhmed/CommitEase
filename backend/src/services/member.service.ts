@@ -517,7 +517,8 @@ export async function getPaymentHistory(masjidId: string, memberId: string) {
         select: { contributionMonth: true, amountAllocated: true },
         orderBy: { contributionMonth: 'asc' },
       },
-      receipt: { select: { receiptNumber: true, generatedAt: true } },
+      receipt: { select: { receiptNumber: true, generatedAt: true, voidedAt: true } },
+      reversal: { select: { reason: true, reversedAt: true, actor: { select: { name: true } } } },
     },
     orderBy: { createdAt: 'desc' },
   });

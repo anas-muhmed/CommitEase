@@ -51,6 +51,7 @@ model Masjid {
   contributionPlans   ContributionPlan[]
   payments            Payment[]
   receipts            Receipt[]
+  paymentReversals    PaymentReversal[]
   auditLogs           AuditLog[]
   otpSessions         OtpSession[]
 }
@@ -117,6 +118,7 @@ model User {
   masjid Masjid? @relation(fields: [masjidId], references: [id])
 
   recordedPayments       Payment[]            @relation("RecordedBy")
+  paymentReversals       PaymentReversal[]    @relation("ReversedBy")
   auditLogs              AuditLog[]           @relation("AuditActor")
   reviewedSignupRequests MasjidSignupRequest[]
 
@@ -184,6 +186,7 @@ model Payment {
 
   allocations PaymentAllocation[]
   receipt     Receipt?
+  reversal    PaymentReversal?
 
   @@index([memberId])
 }
@@ -199,17 +202,35 @@ model PaymentAllocation {
 }
 
 model Receipt {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   masjidId      String
-  paymentId     String   @unique
+  paymentId     String    @unique
   receiptNumber String
-  generatedAt   DateTime @default(now())
+  generatedAt   DateTime  @default(now())
+  voidedAt      DateTime?
 
   masjid  Masjid  @relation(fields: [masjidId], references: [id])
   payment Payment @relation(fields: [paymentId], references: [id])
 
   // Per-masjid sequential receipt numbers (RCP-0001 for masjid A can coexist with RCP-0001 for masjid B).
   @@unique([masjidId, receiptNumber])
+}
+
+// Immutable record created when a payment is reversed or transferred.
+// @@unique([paymentId]) enforces one reversal per payment (Rule 1: already-reversed → 409).
+model PaymentReversal {
+  id         String   @id @default(uuid())
+  paymentId  String   @unique
+  masjidId   String
+  reversedBy String
+  reason     String
+  reversedAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+  masjid  Masjid  @relation(fields: [masjidId], references: [id])
+  actor   User    @relation("ReversedBy", fields: [reversedBy], references: [id])
+
+  @@map("payment_reversals")
 }
 
 model AuditLog {
