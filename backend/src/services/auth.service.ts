@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { Prisma, MasjidStatus } from '@prisma/client';
-import type { UserRole } from '@prisma/client';
+import type { UserRole, CommitteeRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { ApiError } from '../utils/ApiError';
@@ -13,6 +13,8 @@ interface UserAccessPayload {
   sub: string;
   masjidId: string | null;
   role: UserRole;
+  committeeRole: CommitteeRole;
+  mustChangePassword: boolean;
   type: 'user';
 }
 
@@ -102,7 +104,7 @@ export async function committeeLogin(masjidCode: string, username: string, passw
   });
 
   return {
-    accessToken: signAccessToken({ sub: user.id, masjidId: user.masjidId, role: user.role, type: 'user' }),
+    accessToken: signAccessToken({ sub: user.id, masjidId: user.masjidId, role: user.role, committeeRole: user.committeeRole, mustChangePassword: user.mustChangePassword, type: 'user' }),
     refreshToken: signRefreshToken(user.id, 'user'),
     mustChangePassword: user.mustChangePassword,
   };
@@ -118,7 +120,7 @@ export async function refreshCommitteeToken(token: string) {
   if (!user || !user.active) throw new ApiError(401, 'Account not found or inactive.');
 
   return {
-    accessToken: signAccessToken({ sub: user.id, masjidId: user.masjidId, role: user.role, type: 'user' }),
+    accessToken: signAccessToken({ sub: user.id, masjidId: user.masjidId, role: user.role, committeeRole: user.committeeRole, mustChangePassword: user.mustChangePassword, type: 'user' }),
   };
 }
 

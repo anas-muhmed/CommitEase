@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/ApiError';
 import { logAudit } from './audit.service';
+import { upsertMemberSummary } from './member.service';
 
 // ─── Plan CRUD ────────────────────────────────────────────────────────────────
 
@@ -139,5 +140,8 @@ export async function switchMemberPlan(
     }, tx);
 
     return { historyId: history.id, newPlanId, newPlanName: newPlan.name, effectiveFrom };
+  }).then(result => {
+    void upsertMemberSummary(masjidId, memberId);
+    return result;
   });
 }

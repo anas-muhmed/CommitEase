@@ -27,6 +27,8 @@ enum SignupRequestStatus {
 enum PaymentMode {
   CASH
   ONLINE
+  BANK_TRANSFER
+  UPI
 }
 
 enum PaymentStatus {
@@ -34,6 +36,56 @@ enum PaymentStatus {
   SUCCESS
   FAILED
   REVERSED
+}
+
+enum FundAccountType {
+  CASH
+  BANK
+  UPI
+}
+
+enum ExpenseType {
+  MOSQUE_PAID
+  PERSONAL_PAID
+}
+
+enum ExpenseStatus {
+  SETTLED
+  PENDING_REIMB
+  REIMBURSED
+}
+
+enum ExpenseCategory {
+  UTILITIES
+  MAINTENANCE
+  SUPPLIES
+  SALARIES
+  EVENTS
+  DONATIONS
+  OTHER
+}
+
+enum CommitteeRole {
+  VIEWER
+  PAYMENT_OPERATOR
+  TREASURER
+  ADMIN
+}
+
+enum TreasuryEntryType {
+  INCOME
+  EXPENSE
+  REIMBURSEMENT
+  RESERVE_IN
+  RESERVE_OUT
+  ADJUSTMENT
+  TRANSFER
+  REVERSAL
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
 }
 
 model Masjid {
@@ -54,6 +106,12 @@ model Masjid {
   paymentReversals    PaymentReversal[]
   auditLogs           AuditLog[]
   otpSessions         OtpSession[]
+  fundAccounts        FundAccount[]
+  fundReserves        FundReserve[]
+  treasuryLedger      TreasuryLedger[]
+  expenses            Expense[]
+  memberSummaries     MemberFinancialSummary[]
+  receiptSequence     ReceiptSequence?
 }
 
 model MasjidSignupRequest {
@@ -104,16 +162,17 @@ model ContributionFeeHistory {
 }
 
 model User {
-  id                 String   @id @default(uuid())
+  id                 String        @id @default(uuid())
   masjidId           String?
   name               String
   username           String
   passwordHash       String
   role               UserRole
-  active             Boolean  @default(true)
-  mustChangePassword Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  committeeRole      CommitteeRole @default(ADMIN)
+  active             Boolean       @default(true)
+  mustChangePassword Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   masjid Masjid? @relation(fields: [masjidId], references: [id])
 
@@ -121,6 +180,11 @@ model User {
   paymentReversals       PaymentReversal[]    @relation("ReversedBy")
   auditLogs              AuditLog[]           @relation("AuditActor")
   reviewedSignupRequests MasjidSignupRequest[]
+  fundAccountsCreated    FundAccount[]        @relation("FundAccountCreatedBy")
+  fundReservesCreated    FundReserve[]        @relation("FundReserveCreatedBy")
+  treasuryLedgerEntries  TreasuryLedger[]     @relation("TreasuryLedgerCreatedBy")
+  expensesPaid           Expense[]            @relation("ExpensePaidBy")
+  expensesRecorded       Expense[]            @relation("ExpenseRecordedBy")
 
   @@unique([masjidId, username])
 }
@@ -147,6 +211,7 @@ model Member {
   payments          Payment[]
   otpSessions       OtpSession[]
   memberPlanHistory MemberPlanHistory[]
+  financialSummary  MemberFinancialSummary?
 
   @@unique([masjidId, memberCode])
   @@unique([masjidId, phone])
@@ -175,28 +240,31 @@ model Payment {
   paymentStatus    PaymentStatus
   paymentDate      DateTime?
   recordedByUserId String?
+  fundAccountId    String?
   gatewayOrderId   String?
   gatewayPaymentId String?
   note             String?
   createdAt        DateTime      @default(now())
 
-  masjid         Masjid @relation(fields: [masjidId], references: [id])
-  member         Member @relation(fields: [memberId], references: [id])
-  recordedByUser User?  @relation("RecordedBy", fields: [recordedByUserId], references: [id])
+  masjid         Masjid       @relation(fields: [masjidId], references: [id])
+  member         Member       @relation(fields: [memberId], references: [id])
+  recordedByUser User?        @relation("RecordedBy", fields: [recordedByUserId], references: [id])
+  fundAccount    FundAccount? @relation(fields: [fundAccountId], references: [id])
 
   allocations PaymentAllocation[]
   receipt     Receipt?
   reversal    PaymentReversal?
 
   @@index([memberId])
+  @@index([fundAccountId])
 }
 
 model PaymentAllocation {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   paymentId         String
-  contributionMonth DateTime
-  amountAllocated   Decimal  @db.Decimal(10, 2)
-  createdAt         DateTime @default(now())
+  contributionMonth DateTime? // NULL = opening-balance payment (clears openingDueBalance)
+  amountAllocated   Decimal   @db.Decimal(10, 2)
+  createdAt         DateTime  @default(now())
 
   payment Payment @relation(fields: [paymentId], references: [id])
 }
@@ -265,4 +333,146 @@ model OtpSession {
   masjid Masjid @relation(fields: [masjidId], references: [id])
 
   @@unique([masjidId, phone])
+}
+
+// ── Treasury ──────────────────────────────────────────────────────────────────
+
+model FundAccount {
+  id             String          @id @default(uuid())
+  masjidId       String
+  name           String
+  type           FundAccountType
+  currentBalance Decimal         @default(0) @db.Decimal(12, 2)
+  active         Boolean         @default(true)
+  createdByUserId String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  masjid        Masjid           @relation(fields: [masjidId], references: [id])
+  createdBy     User             @relation("FundAccountCreatedBy", fields: [createdByUserId], references: [id])
+  ledgerEntries TreasuryLedger[]
+  payments      Payment[]
+  expensesPaidFrom     Expense[] @relation("ExpensePaidFrom")
+  expensesReimbursedFrom Expense[] @relation("ExpenseReimbursedFrom")
+
+  @@unique([masjidId, name])
+  @@index([masjidId, active])
+}
+
+model FundReserve {
+  id               String   @id @default(uuid())
+  masjidId         String
+  title            String
+  purpose          String?
+  amount           Decimal  @default(0) @db.Decimal(12, 2)
+  active           Boolean  @default(true)
+  restricted       Boolean  @default(false)
+  approvalRequired Boolean  @default(false)
+  createdByUserId  String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  masjid    Masjid @relation(fields: [masjidId], references: [id])
+  createdBy User   @relation("FundReserveCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@unique([masjidId, title])
+  @@index([masjidId, active])
+}
+
+// ── Expenses ──────────────────────────────────────────────────────────────────
+// MOSQUE_PAID: paid from a fund account → balance decrements + EXPENSE ledger entry.
+// PERSONAL_PAID: committee member paid personally → status=PENDING_REIMB, no balance change yet.
+// On reimbursement: status→REIMBURSED, source balance decrements + REIMBURSEMENT ledger entry.
+
+model Expense {
+  id               String          @id @default(uuid())
+  masjidId         String
+  expenseType      ExpenseType
+  status           ExpenseStatus
+  category         ExpenseCategory
+  amount           Decimal         @db.Decimal(12, 2)
+  description      String?
+
+  // MOSQUE_PAID: which account was debited
+  fundAccountId    String?
+
+  // PERSONAL_PAID: who paid out of pocket
+  paidByUserId     String?
+
+  // Reimbursement fields (filled when status → REIMBURSED)
+  reimbursedAt         DateTime?
+  reimbursedFromId     String?
+
+  recordedByUserId String
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  masjid         Masjid       @relation(fields: [masjidId],         references: [id])
+  fundAccount    FundAccount? @relation("ExpensePaidFrom",          fields: [fundAccountId],    references: [id])
+  reimbursedFrom FundAccount? @relation("ExpenseReimbursedFrom",    fields: [reimbursedFromId], references: [id])
+  paidBy         User?        @relation("ExpensePaidBy",            fields: [paidByUserId],     references: [id])
+  recordedBy     User         @relation("ExpenseRecordedBy",        fields: [recordedByUserId], references: [id])
+
+  @@index([masjidId, createdAt])
+  @@index([masjidId, status])
+}
+
+// ── Member Financial Summary (precomputed cache) ──────────────────────────────
+// Updated fire-and-forget after payment events. Used as a fast-path for list
+// rendering without re-computing the full ledger per member.
+
+model MemberFinancialSummary {
+  memberId          String   @id
+  masjidId          String
+  totalOutstanding  Decimal  @default(0) @db.Decimal(12, 2)
+  overdueMonths     Int      @default(0)
+  healthScore       Int      @default(100)
+  healthGrade       String   @default("EXCELLENT")
+  lastPaymentAt     DateTime?
+  totalPaidLifetime Decimal  @default(0) @db.Decimal(12, 2)
+  paidThisMonth     Boolean  @default(false)
+  computedAt        DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id])
+  masjid Masjid @relation(fields: [masjidId], references: [id])
+
+  @@index([masjidId])
+}
+
+// ── Treasury Ledger ───────────────────────────────────────────────────────────
+// Immutable account-level audit trail. Every balance mutation writes one entry.
+// Transfers produce two entries (DEBIT on source, CREDIT on destination).
+// Source of truth for balance = SUM of FundAccount.currentBalance; ledger is for history.
+
+model TreasuryLedger {
+  id              String            @id @default(uuid())
+  masjidId        String
+  accountId       String
+  entryType       TreasuryEntryType
+  direction       LedgerDirection
+  amount          Decimal           @db.Decimal(12, 2)
+  referenceId     String?
+  referenceType   String?
+  note            String?
+  createdByUserId String
+  createdAt       DateTime          @default(now())
+
+  masjid    Masjid      @relation(fields: [masjidId],        references: [id])
+  account   FundAccount @relation(fields: [accountId],       references: [id])
+  createdBy User        @relation("TreasuryLedgerCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([masjidId, createdAt])
+  @@index([accountId, createdAt])
+  @@index([masjidId, entryType, createdAt])
+}
+
+// ── Receipt Sequence ──────────────────────────────────────────────────────────
+// Per-masjid atomic counter for sequential receipt numbers.
+// UPSERT inside a transaction guarantees unique RCP-NNNNN under concurrent writes.
+
+model ReceiptSequence {
+  masjidId   String @id
+  lastNumber Int    @default(0)
+
+  masjid Masjid @relation(fields: [masjidId], references: [id])
 }

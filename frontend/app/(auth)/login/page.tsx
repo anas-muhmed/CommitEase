@@ -6,160 +6,204 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { login } from '@/lib/api/auth.api';
 import { useAuthStore } from '@/lib/store/auth.store';
-import { cn } from '@/lib/utils';
+import type { CommitteeRole } from '@/lib/store/auth.store';
 
 const schema = z.object({
-  masjidCode: z.string().min(1, 'Masjid code is required'),
-  username: z.string().min(1, 'Username is required'),
-  password: z.string().min(1, 'Password is required'),
+  masjidCode: z.string().min(1),
+  username:   z.string().min(1),
+  password:   z.string().min(1),
 });
-
-type FormValues = z.infer<typeof schema>;
+type F = z.infer<typeof schema>;
 
 export default function LoginPage() {
-  const router = useRouter();
+  const router  = useRouter();
   const setAuth = useAuthStore((s) => s.setAuth);
-  const [showPassword, setShowPassword] = useState(false);
-  const [serverError, setServerError] = useState('');
+  const [show, setShow]   = useState(false);
+  const [err,  setErr]    = useState('');
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) });
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<F>({
+    resolver: zodResolver(schema),
+  });
 
-  async function onSubmit(values: FormValues) {
-    setServerError('');
+  async function onSubmit(v: F) {
+    setErr('');
     try {
-      const { accessToken, mustChangePassword } = await login(values);
-
-      // Decode the JWT payload (client-side only, for display — NOT for security).
-      // The JWT contains: sub (userId), masjidId, role, type. Name is not in JWT.
-      const payload = parseJwtPayload(accessToken);
+      const { accessToken, mustChangePassword } = await login(v);
+      const p = jwtDecode(accessToken);
       setAuth(accessToken, {
-        id: payload['sub'] ?? '',
+        id: p['sub'] ?? '',
         name: 'Committee',
-        role: (payload['role'] as 'SUPER_ADMIN' | 'COMMITTEE_ADMIN') ?? 'COMMITTEE_ADMIN',
-        masjidId: payload['masjidId'] ?? null,
+        role: (p['role'] as 'SUPER_ADMIN' | 'COMMITTEE_ADMIN') ?? 'COMMITTEE_ADMIN',
+        masjidId: p['masjidId'] ?? null,
         mustChangePassword,
+        committeeRole: (p['committeeRole'] as CommitteeRole) ?? undefined,
       });
-
       router.push(mustChangePassword ? '/change-password' : '/dashboard');
-    } catch (err: unknown) {
-      const msg = extractErrorMessage(err);
-      setServerError(msg);
+    } catch (e) {
+      setErr(extractMsg(e));
     }
   }
 
   return (
-    <div className="w-full max-w-sm space-y-8">
-      {/* Wordmark */}
-      <div className="text-center space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">CommitEase</h1>
-        <p className="text-sm text-muted-foreground">Committee Management</p>
+    <div style={{ width: '100%', maxWidth: 400 }}>
+
+      {/* ── Brand ──────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 32 }}>
+        {/* Logo mark */}
+        <div style={{
+          width: 60, height: 60,
+          borderRadius: 20,
+          background: 'var(--gradient-hero)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          marginBottom: 16,
+          boxShadow: '0 8px 24px rgb(12 102 64 / 0.30)',
+        }}>
+          <svg viewBox="0 0 32 32" fill="none" style={{ width: 34, height: 34 }}>
+            <path d="M16 3 C16 3 11 7 11 11.5 V14 H8 V28 H24 V14 H21 V11.5 C21 7 16 3 16 3Z"
+              fill="white" fillOpacity="0.92"/>
+            <path d="M4.5 14 V28 H9.5 V14 Q7 12.5 4.5 14Z" fill="white" fillOpacity="0.55"/>
+            <path d="M22.5 14 V28 H27.5 V14 Q25 12.5 22.5 14Z" fill="white" fillOpacity="0.55"/>
+            <rect x="13.5" y="20" width="5" height="8" rx="1.5" fill="white" fillOpacity="0.5"/>
+            <circle cx="16" cy="2.5" r="1.8" fill="white" fillOpacity="0.75"/>
+          </svg>
+        </div>
+
+        <h1 className="type-title" style={{ color: '#0A1C12' }}>CommitEase</h1>
+        <p className="type-label" style={{ color: '#7A9185', marginTop: 6, fontWeight: 500 }}>
+          Committee Management Portal
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="masjidCode">Masjid Code</Label>
-          <Input
-            id="masjidCode"
-            placeholder="e.g. AL-AMIN"
+      {/* ── Form card ──────────────────────────────────────────── */}
+      <div style={{
+        background: '#FFFFFF',
+        borderRadius: 24,
+        padding: 32,
+        boxShadow: '0 4px 24px rgb(10 28 18 / 0.07), 0 1px 4px rgb(10 28 18 / 0.05)',
+        display: 'flex', flexDirection: 'column', gap: 20,
+      }}>
+
+        <FormField label="Masjid Code" error={errors.masjidCode?.message}>
+          <input
+            placeholder="e.g. DEMO"
             autoCapitalize="characters"
             autoCorrect="off"
-            className="uppercase placeholder:normal-case"
-            {...register('masjidCode', {
-              setValueAs: (v: string) => v.toUpperCase().trim(),
-            })}
+            style={inputStyle(!!errors.masjidCode)}
+            {...register('masjidCode', { setValueAs: (v: string) => v.toUpperCase().trim() })}
           />
-          {errors.masjidCode && (
-            <p className="text-xs text-destructive">{errors.masjidCode.message}</p>
-          )}
-        </div>
+        </FormField>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="username">Username</Label>
-          <Input
-            id="username"
+        <FormField label="Username" error={errors.username?.message}>
+          <input
             autoComplete="username"
-            autoCorrect="off"
             autoCapitalize="none"
+            autoCorrect="off"
+            style={inputStyle(!!errors.username)}
             {...register('username')}
           />
-          {errors.username && (
-            <p className="text-xs text-destructive">{errors.username.message}</p>
-          )}
-        </div>
+        </FormField>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
+        <FormField label="Password" error={errors.password?.message}>
+          <div style={{ position: 'relative' }}>
+            <input
+              type={show ? 'text' : 'password'}
               autoComplete="current-password"
-              className="pr-10"
+              style={{ ...inputStyle(!!errors.password), paddingRight: 44 }}
               {...register('password')}
             />
             <button
               type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => setShowPassword((v) => !v)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              onClick={() => setShow(v => !v)}
+              style={{
+                position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+                color: '#7A9185', background: 'none', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center',
+              }}
             >
-              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              {show ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
-          {errors.password && (
-            <p className="text-xs text-destructive">{errors.password.message}</p>
-          )}
-        </div>
+        </FormField>
 
-        {serverError && (
-          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3">
-            <p className="text-sm text-destructive">{serverError}</p>
+        {err && (
+          <div style={{
+            background: '#FDF2F1', borderRadius: 12,
+            border: '1px solid rgb(192 57 43 / 0.2)',
+            padding: '12px 16px',
+          }}>
+            <p className="type-label" style={{ color: '#C0392B' }}>{err}</p>
           </div>
         )}
 
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+        <button
+          type="button"
+          onClick={handleSubmit(onSubmit)}
+          disabled={isSubmitting}
+          style={{
+            width: '100%', height: 52,
+            borderRadius: 16,
+            background: isSubmitting ? '#7fbfa0' : 'var(--gradient-hero)',
+            color: '#fff',
+            border: 'none',
+            cursor: isSubmitting ? 'default' : 'pointer',
+            fontFamily: 'inherit',
+            fontSize: 15, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            marginTop: 4,
+            boxShadow: isSubmitting ? 'none' : '0 4px 16px rgb(12 102 64 / 0.28)',
+            transition: 'opacity 0.15s',
+          }}
+        >
+          {isSubmitting && <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />}
           Sign In
-        </Button>
-      </form>
+        </button>
+      </div>
 
-      <p className="text-center text-xs text-muted-foreground">
-        Need help? Contact your masjid administrator.
+      <p className="type-caption" style={{ textAlign: 'center', color: '#7A9185', marginTop: 24 }}>
+        Secure · Simple · Transparent
       </p>
     </div>
   );
 }
 
-// Decode JWT payload for display-only user info (not for security verification).
-function parseJwtPayload(token: string): Record<string, string> {
-  try {
-    const b64 = token.split('.')[1] ?? '';
-    return JSON.parse(atob(b64.replace(/-/g, '+').replace(/_/g, '/'))) as Record<string, string>;
-  } catch {
-    return {};
-  }
+function FormField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <label className="type-label" style={{ color: '#0A1C12' }}>{label}</label>
+      {children}
+      {error && <p className="type-caption" style={{ color: '#C0392B' }}>{error}</p>}
+    </div>
+  );
 }
 
-function extractErrorMessage(err: unknown): string {
-  if (
-    err &&
-    typeof err === 'object' &&
-    'response' in err &&
-    err.response &&
-    typeof err.response === 'object' &&
-    'data' in err.response
-  ) {
-    const data = err.response.data as { message?: string };
-    return data.message ?? 'Sign in failed. Please try again.';
+function inputStyle(hasErr: boolean): React.CSSProperties {
+  return {
+    width: '100%', height: 48,
+    borderRadius: 12,
+    border: `1.5px solid ${hasErr ? 'rgb(192 57 43 / 0.4)' : '#E2E8E3'}`,
+    background: hasErr ? '#FDF2F1' : '#F4F5F1',
+    padding: '0 16px',
+    fontSize: 15, fontWeight: 500,
+    color: '#0A1C12',
+    outline: 'none',
+    fontFamily: 'inherit',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
+  };
+}
+
+function jwtDecode(t: string): Record<string, string> {
+  try {
+    const b = t.split('.')[1] ?? '';
+    return JSON.parse(atob(b.replace(/-/g,'+').replace(/_/g,'/'))) as Record<string, string>;
+  } catch { return {}; }
+}
+
+function extractMsg(e: unknown) {
+  if (e && typeof e === 'object' && 'response' in e) {
+    const r = (e as { response?: { data?: { message?: string } } }).response;
+    return r?.data?.message ?? 'Sign in failed.';
   }
-  return 'Sign in failed. Please try again.';
+  return 'Sign in failed.';
 }

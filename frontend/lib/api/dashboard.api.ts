@@ -1,5 +1,30 @@
 import { apiClient } from './client';
 
+export interface TreasuryAccount {
+  id: string;
+  name: string;
+  type: 'CASH' | 'BANK' | 'UPI';
+  balance: string;
+}
+
+export interface TreasuryReserve {
+  id: string;
+  title: string;
+  amount: string;
+  restricted: boolean;
+}
+
+export interface TreasurySnapshot {
+  hasAccounts: boolean;
+  totalBalance: string;
+  netUsable: string;
+  pendingReimbursements: string;
+  pendingReimbursementCount: number;
+  totalReserved: string;
+  accounts: TreasuryAccount[];
+  reserves: TreasuryReserve[];
+}
+
 export interface DashboardData {
   members: { active: number; inactive: number };
   collection: {
@@ -12,7 +37,7 @@ export interface DashboardData {
     amount: string;
     paymentDate: string | null;
     createdAt: string;
-    member: { name: string; memberCode: string };
+    member: { id: string; name: string; memberCode: string };
     receipt: { receiptNumber: string } | null;
   }[];
   recentReversals: {
@@ -22,6 +47,7 @@ export interface DashboardData {
     payment: { amount: string; member: { name: string; memberCode: string } };
     actor: { name: string };
   }[];
+  treasury: TreasurySnapshot;
 }
 
 export interface OverdueMember {

@@ -129,6 +129,30 @@ export const bulkImport: RequestHandler = async (req, res) => {
   sendSuccess(res, result, message, result.created > 0 ? 201 : 200);
 };
 
+export const listEnriched: RequestHandler = async (req, res) => {
+  const result = await MemberService.listMembersEnriched(req.user!.masjidId!);
+  sendSuccess(res, result);
+};
+
+export const reactivate: RequestHandler = async (req, res) => {
+  const result = await MemberService.reactivateMember(
+    req.user!.masjidId!,
+    param(req, 'memberId'),
+    req.user!.id,
+  );
+  sendSuccess(res, result, 'Member reactivated.');
+};
+
+export const listTeam: RequestHandler = async (req, res) => {
+  const { prisma } = await import('../config/database.js');
+  const users = await prisma.user.findMany({
+    where: { masjidId: req.user!.masjidId!, active: true },
+    select: { id: true, name: true, committeeRole: true },
+    orderBy: { name: 'asc' },
+  });
+  sendSuccess(res, users);
+};
+
 // ─── Ledger and payments ──────────────────────────────────────────────────────
 
 export const getLedger: RequestHandler = async (req, res) => {
@@ -144,12 +168,14 @@ export const recordPayment: RequestHandler = async (req, res) => {
   const amount = optionalNumber(body, 'amount');
   if (amount === undefined) throw new ApiError(400, 'amount is required.');
 
-  const note = optionalString(body, 'note');
+  const note          = optionalString(body, 'note');
+  const fundAccountId = optionalString(body, 'fundAccountId');
 
   const result = await MemberService.recordPayment(masjidId, memberId, req.user!.id, {
     amount,
     paymentDate: requireString(body, 'paymentDate'),
-    ...(note !== undefined && { note }),
+    ...(note          !== undefined && { note }),
+    ...(fundAccountId !== undefined && { fundAccountId }),
   });
 
   sendSuccess(res, result, `Payment recorded. Receipt ${result.receipt.receiptNumber} issued.`, 201);

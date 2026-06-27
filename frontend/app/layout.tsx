@@ -1,27 +1,24 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Manrope } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const manrope = Manrope({
   subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
+  variable: '--font-manrope',
+  weight: ['500', '600', '700', '800'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
   title: 'CommitEase',
-  description: 'Mosque committee management — simplified.',
+  description: 'Mosque committee management, simplified.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full bg-background text-foreground">
+    <html lang="en" className={manrope.variable}>
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>

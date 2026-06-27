@@ -2,12 +2,20 @@
 
 import { create } from 'zustand';
 
+export type CommitteeRole = 'VIEWER' | 'PAYMENT_OPERATOR' | 'TREASURER' | 'ADMIN';
+
 export interface AuthUser {
   id: string;
   name: string;
   role: 'SUPER_ADMIN' | 'COMMITTEE_ADMIN';
   masjidId: string | null;
   mustChangePassword: boolean;
+  committeeRole?: CommitteeRole;
+}
+
+export function hasMinRole(userRole: CommitteeRole | undefined, minimum: CommitteeRole): boolean {
+  const rank: Record<CommitteeRole, number> = { VIEWER: 0, PAYMENT_OPERATOR: 1, TREASURER: 2, ADMIN: 3 };
+  return rank[userRole ?? 'VIEWER'] >= rank[minimum];
 }
 
 interface AuthState {
