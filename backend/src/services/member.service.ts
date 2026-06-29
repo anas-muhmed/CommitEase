@@ -76,6 +76,7 @@ const MEMBER_SELECT = {
   contributionPlanId: true,
   contributionPlan: { select: { id: true, name: true } },
   openingDueBalance: true,
+  chelavParticipation: true,
   appActivated: true,
   lastLoginAt: true,
   active: true,
@@ -93,6 +94,7 @@ export interface CreateMemberInput {
   address?: string;
   openingDueBalance?: number;
   contributionPlanId?: string;
+  chelavParticipation?: boolean;
 }
 
 // ─── Plan resolution ──────────────────────────────────────────────────────────
@@ -143,6 +145,7 @@ export async function createMember(
     contributionStartDate,
     ...(input.address !== undefined && { address: input.address }),
     ...(input.openingDueBalance !== undefined && { openingDueBalance: input.openingDueBalance }),
+    ...(input.chelavParticipation !== undefined && { chelavParticipation: input.chelavParticipation }),
   };
 
   const runCreate = async (tx: Prisma.TransactionClient, memberCode: string) => {
@@ -244,6 +247,7 @@ export async function updateMember(
     address?: string;
     contributionStartDate?: string;
     openingDueBalance?: number;
+    chelavParticipation?: boolean;
   },
 ) {
   const existing = await prisma.member.findUnique({
@@ -274,6 +278,7 @@ export async function updateMember(
         ...(input.address !== undefined && { address: input.address }),
         ...(contributionStartDate !== undefined && { contributionStartDate }),
         ...(input.openingDueBalance !== undefined && { openingDueBalance: input.openingDueBalance }),
+        ...(input.chelavParticipation !== undefined && { chelavParticipation: input.chelavParticipation }),
       },
       select: MEMBER_SELECT,
     });

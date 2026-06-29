@@ -88,6 +88,13 @@ enum LedgerDirection {
   DEBIT
 }
 
+enum ChelavStatus {
+  ASSIGNED
+  COMPLETED
+  SKIPPED
+  SWAPPED
+}
+
 model Masjid {
   id           String       @id @default(uuid())
   code         String       @unique
@@ -112,6 +119,7 @@ model Masjid {
   expenses            Expense[]
   memberSummaries     MemberFinancialSummary[]
   receiptSequence     ReceiptSequence?
+  chelavSchedules     ChelavSchedule[]
 }
 
 model MasjidSignupRequest {
@@ -205,6 +213,8 @@ model Member {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  chelavParticipation Boolean   @default(true)
+
   masjid           Masjid           @relation(fields: [masjidId], references: [id])
   contributionPlan ContributionPlan @relation(fields: [contributionPlanId], references: [id])
 
@@ -212,6 +222,7 @@ model Member {
   otpSessions       OtpSession[]
   memberPlanHistory MemberPlanHistory[]
   financialSummary  MemberFinancialSummary?
+  chelavSchedules   ChelavSchedule[]
 
   @@unique([masjidId, memberCode])
   @@unique([masjidId, phone])
@@ -475,4 +486,30 @@ model ReceiptSequence {
   lastNumber Int    @default(0)
 
   masjid Masjid @relation(fields: [masjidId], references: [id])
+}
+
+// ── Chelav Schedule ───────────────────────────────────────────────────────────
+// One row per day. memberId is optional so household/non-member labels work.
+// displayLabel is always set — auto-populated from member.name when memberId is
+// provided. swappedWithId is a plain string ref (no Prisma relation) to avoid
+// circular self-relation complexity.
+
+model ChelavSchedule {
+  id            String       @id @default(uuid())
+  masjidId      String
+  memberId      String?
+  displayLabel  String
+  date          DateTime     @db.Date
+  status        ChelavStatus @default(ASSIGNED)
+  notes         String?
+  swappedWithId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  masjid Masjid  @relation(fields: [masjidId], references: [id])
+  member Member? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  @@unique([masjidId, date])
+  @@index([masjidId, date])
 }

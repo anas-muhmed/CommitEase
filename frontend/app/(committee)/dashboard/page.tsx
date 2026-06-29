@@ -8,13 +8,14 @@ import {
   Users, Receipt, CreditCard,
   PlusCircle, BarChart2, Landmark,
   Settings, ShieldCheck, UserCog, ClipboardList, LogOut,
-  TrendingUp, TrendingDown,
+  TrendingUp, TrendingDown, UtensilsCrossed, CheckCircle2, XCircle, ArrowLeftRight, Loader2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useDashboard, useCollectionReport } from '@/lib/hooks/useDashboard';
 import { MemberAvatar } from '@/components/ui/member-avatar';
 import { useAuthStore } from '@/lib/store/auth.store';
 import { logout } from '@/lib/api/auth.api';
+import { useTodayChelav, useUpdateChelavStatus } from '@/lib/hooks/useChelav';
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 function inr(n: string | number, compact = false) {
@@ -296,16 +297,7 @@ export default function DashboardPage() {
             icon={<CreditCard size={16} className="text-[#0E7A52]" />}
             iconBg="bg-[#E8F5EF]"
           />
-          <Link href="/members" className="block group">
-            <StatCard
-              label="Active Members"
-              value={isLoading ? null : String(active)}
-              sub={isLoading ? null : `${inactive} inactive`}
-              icon={<Users size={16} className="text-[#0E7A52]" />}
-              iconBg="bg-[#E8F5EF]"
-              tappable
-            />
-          </Link>
+          <ChelavTodayCard />
           <StatCard
             label="vs. Last Month"
             value={isLoading || collectionLoading ? null : momChange === null ? '—' : `${momChange > 0 ? '+' : ''}${momChange}%`}
@@ -502,6 +494,116 @@ function IslamicPatternFine() {
 /* ═══════════════════════════════════════════════════════════════════════════
    Sub-components
    ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Today's Chelav Widget ───────────────────────────────────────────────── */
+function ChelavTodayCard() {
+  const { data, isLoading } = useTodayChelav();
+  const updateStatus = useUpdateChelavStatus();
+  const entry = data?.entry ?? null;
+
+  const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('en-IN', {
+    weekday: 'short', day: 'numeric', month: 'short',
+  });
+
+  const STATUS_COLOR: Record<string, string> = {
+    ASSIGNED: '#D97706', COMPLETED: '#0B6644', SKIPPED: '#6B7280', SWAPPED: '#2563EB',
+  };
+  const STATUS_BG: Record<string, string> = {
+    ASSIGNED: '#FFFBEB', COMPLETED: '#E8F5EF', SKIPPED: '#F3F4F6', SWAPPED: '#EFF6FF',
+  };
+
+  function act(status: 'COMPLETED' | 'SKIPPED') {
+    if (!entry || updateStatus.isPending) return;
+    updateStatus.mutate({ id: entry.id, status });
+  }
+
+  return (
+    <div className="bg-white rounded-[20px] shadow-[0_4px_16px_rgba(15,23,42,0.06)] px-5 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-xl bg-[#FEF3C7] flex items-center justify-center shrink-0">
+            <UtensilsCrossed size={16} color="#D97706" strokeWidth={2.2} />
+          </div>
+          <p className="text-[13px] font-semibold text-[#374151]">Today's Chelav</p>
+        </div>
+        <Link href="/chelav" className="text-[11.5px] font-semibold text-[#0E7A52] hover:opacity-70 flex items-center gap-0.5">
+          Calendar <ChevronRight size={11} strokeWidth={2.2} />
+        </Link>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          <div className="h-5 w-36 rounded-lg bg-gray-100 animate-pulse" />
+          <div className="h-3.5 w-24 rounded-lg bg-gray-100 animate-pulse" />
+          <div className="h-8 w-full rounded-xl bg-gray-100 animate-pulse mt-2" />
+        </div>
+      ) : !entry ? (
+        <div className="py-3 text-center">
+          <p className="text-[13px] font-medium text-[#9CA3AF]">No chelav assigned today</p>
+          <Link href="/chelav" className="text-[12px] font-semibold text-[#0E7A52] hover:opacity-70 mt-1 block">
+            Manage schedule →
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[17px] font-extrabold text-[#111827] truncate leading-tight">{entry.displayLabel}</p>
+              <p className="text-[11.5px] text-[#6B7280] mt-0.5">{fmtDay(entry.date)}</p>
+            </div>
+            <span className="shrink-0 text-[11px] font-semibold rounded-full px-2.5 py-1"
+              style={{ background: STATUS_BG[entry.status] ?? '#F3F4F6', color: STATUS_COLOR[entry.status] ?? '#6B7280' }}>
+              {entry.status.charAt(0) + entry.status.slice(1).toLowerCase()}
+            </span>
+          </div>
+
+          {/* Quick actions */}
+          {entry.status === 'ASSIGNED' && (
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => act('COMPLETED')}
+                disabled={updateStatus.isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold rounded-xl py-2 border transition-colors"
+                style={{ borderColor: '#BBF7D0', background: '#F0FDF4', color: '#15803D' }}
+              >
+                {updateStatus.isPending
+                  ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                  : <CheckCircle2 size={13} strokeWidth={2.2} />}
+                Complete
+              </button>
+              <Link
+                href={`/chelav?swap=${entry.id}`}
+                className="flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold rounded-xl py-2 border transition-colors"
+                style={{ borderColor: '#BFDBFE', background: '#EFF6FF', color: '#1D4ED8' }}
+              >
+                <ArrowLeftRight size={13} strokeWidth={2.2} />
+                Swap
+              </Link>
+              <button
+                onClick={() => act('SKIPPED')}
+                disabled={updateStatus.isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold rounded-xl py-2 border transition-colors"
+                style={{ borderColor: '#E5E7EB', background: '#F9FAFB', color: '#6B7280' }}
+              >
+                <XCircle size={13} strokeWidth={2.2} />
+                Skip
+              </button>
+            </div>
+          )}
+          {entry.status !== 'ASSIGNED' && (
+            <button
+              onClick={() => { if (entry && !updateStatus.isPending) updateStatus.mutate({ id: entry.id, status: 'ASSIGNED' }); }}
+              disabled={updateStatus.isPending}
+              className="mt-3 w-full text-[12px] font-semibold text-[#6B7280] hover:text-[#374151] py-1.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] transition-colors"
+            >
+              Reset to Assigned
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 function StatCard({
   label, value, sub, icon, iconBg, tappable, valueColor,

@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronRight, Search, X, Plus, Users,
   TrendingUp, AlertTriangle, IndianRupee, ArrowUpDown,
   SlidersHorizontal, Calendar, Download, MessageCircle,
-  CheckSquare, Square,
+  CheckSquare, Square, UtensilsCrossed,
 } from 'lucide-react';
 import AppLogo from '@/components/layout/AppLogo';
 import { useEnrichedMembers } from '@/lib/hooks/useMembers';
@@ -632,7 +632,14 @@ function MemberCard({ member: m, selectMode, selected, onToggleSelect }: {
 
       {/* Identity */}
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold text-[#111827] truncate">{m.name}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-[14px] font-semibold text-[#111827] truncate">{m.name}</p>
+          {!m.chelavParticipation && (
+            <span title="Not in chelav rotation">
+              <UtensilsCrossed size={12} color="#D97706" strokeWidth={2.2} />
+            </span>
+          )}
+        </div>
         <p className="text-[12px] font-medium text-[#6B7280] mt-[2px] truncate">
           {m.memberCode}
           <span className="mx-1.5 text-[#C7CDD6]">·</span>

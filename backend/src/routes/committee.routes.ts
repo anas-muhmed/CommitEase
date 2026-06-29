@@ -11,6 +11,7 @@ import * as TreasuryController from '../controllers/treasury.controller';
 import * as ExpenseController from '../controllers/expense.controller';
 import * as PaymentFeedController from '../controllers/payment-feed.controller';
 import * as SettingsController from '../controllers/settings.controller';
+import * as ChelavController from '../controllers/chelav.controller';
 import { requireCommitteeRole } from '../middleware/authorizeCommitteeRole';
 
 const router = Router();
@@ -95,5 +96,13 @@ router.post('/finance/expenses/:expenseId/reimburse', committee, requireCommitte
 // ─── Mosque settings ──────────────────────────────────────────────────────────
 router.get('/settings',   committee, SettingsController.getSettings);
 router.patch('/settings', committee, requireCommitteeRole('ADMIN'), SettingsController.updateSettings);
+
+// ─── Chelav schedule ──────────────────────────────────────────────────────────
+// Static routes registered before dynamic /:id param route.
+router.get('/chelav/today',           committee, ChelavController.getToday);
+router.get('/chelav/:year/:month',    committee, ChelavController.getMonth);
+router.post('/chelav/swap',           committee, requireCommitteeRole('PAYMENT_OPERATOR'), ChelavController.swap);
+router.post('/chelav/import',         committee, requireCommitteeRole('ADMIN'), ChelavController.importSchedule);
+router.patch('/chelav/:id/status',    committee, requireCommitteeRole('PAYMENT_OPERATOR'), ChelavController.updateStatus);
 
 export default router;

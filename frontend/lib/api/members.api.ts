@@ -10,6 +10,7 @@ export interface MemberSummary {
   contributionPlan: { id: string; name: string };
   contributionStartDate: string;
   openingDueBalance: string;
+  chelavParticipation: boolean;
   active: boolean;
   createdAt: string;
 }
@@ -34,6 +35,7 @@ export interface EnrichedMember {
   contributionPlan: { id: string; name: string };
   contributionStartDate: string;
   openingDueBalance: string;
+  chelavParticipation: boolean;
   createdAt: string;
   totalOutstanding: string;
   overdueMonths: number;

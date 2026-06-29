@@ -59,6 +59,7 @@ export const createMember: RequestHandler = async (req, res) => {
   const address = optionalString(body, 'address');
   const openingDueBalance = optionalNumber(body, 'openingDueBalance');
   const contributionPlanId = optionalString(body, 'contributionPlanId');
+  const chelavParticipation = body['chelavParticipation'] === undefined ? undefined : Boolean(body['chelavParticipation']);
 
   const member = await MemberService.createMember(masjidId, req.user!.id, {
     name: requireString(body, 'name'),
@@ -68,6 +69,7 @@ export const createMember: RequestHandler = async (req, res) => {
     ...(address !== undefined && { address }),
     ...(openingDueBalance !== undefined && { openingDueBalance }),
     ...(contributionPlanId !== undefined && { contributionPlanId }),
+    ...(chelavParticipation !== undefined && { chelavParticipation }),
   });
 
   sendSuccess(res, member, 'Member created.', 201);
@@ -88,6 +90,7 @@ export const updateMember: RequestHandler = async (req, res) => {
   const address = optionalString(body, 'address');
   const contributionStartDate = optionalString(body, 'contributionStartDate');
   const openingDueBalance = optionalNumber(body, 'openingDueBalance');
+  const chelavParticipation = body['chelavParticipation'] === undefined ? undefined : Boolean(body['chelavParticipation']);
 
   const member = await MemberService.updateMember(masjidId, memberId, req.user!.id, {
     ...(name !== undefined && { name }),
@@ -95,6 +98,7 @@ export const updateMember: RequestHandler = async (req, res) => {
     ...(address !== undefined && { address }),
     ...(contributionStartDate !== undefined && { contributionStartDate }),
     ...(openingDueBalance !== undefined && { openingDueBalance }),
+    ...(chelavParticipation !== undefined && { chelavParticipation }),
   });
 
   sendSuccess(res, member, 'Member updated.');
