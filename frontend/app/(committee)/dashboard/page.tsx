@@ -282,7 +282,7 @@ export default function DashboardPage() {
                 className="flex items-center gap-1.5 text-white text-[13px] font-semibold rounded-xl px-4 py-2.5 border border-white/20 hover:bg-white/[0.10] transition-all duration-150"
                 style={{ background: 'rgba(0,0,0,0.24)', backdropFilter: 'blur(6px)' }}>
                 <PlusCircle size={13} strokeWidth={2} />
-                Record Payment
+                Add Payment
               </Link>
             </div>
           </div>
@@ -505,6 +505,9 @@ function ChelavTodayCard() {
     weekday: 'short', day: 'numeric', month: 'short',
   });
 
+  const STATUS_LABEL: Record<string, string> = {
+    ASSIGNED: 'Scheduled', COMPLETED: 'Completed', SKIPPED: 'Missed', SWAPPED: 'Changed',
+  };
   const STATUS_COLOR: Record<string, string> = {
     ASSIGNED: '#D97706', COMPLETED: '#0B6644', SKIPPED: '#6B7280', SWAPPED: '#2563EB',
   };
@@ -553,7 +556,7 @@ function ChelavTodayCard() {
             </div>
             <span className="shrink-0 text-[11px] font-semibold rounded-full px-2.5 py-1"
               style={{ background: STATUS_BG[entry.status] ?? '#F3F4F6', color: STATUS_COLOR[entry.status] ?? '#6B7280' }}>
-              {entry.status.charAt(0) + entry.status.slice(1).toLowerCase()}
+              {STATUS_LABEL[entry.status] ?? entry.status}
             </span>
           </div>
 
@@ -586,7 +589,7 @@ function ChelavTodayCard() {
                 style={{ borderColor: '#E5E7EB', background: '#F9FAFB', color: '#6B7280' }}
               >
                 <XCircle size={13} strokeWidth={2.2} />
-                Skip
+                Miss
               </button>
             </div>
           )}
@@ -596,7 +599,7 @@ function ChelavTodayCard() {
               disabled={updateStatus.isPending}
               className="mt-3 w-full text-[12px] font-semibold text-[#6B7280] hover:text-[#374151] py-1.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] transition-colors"
             >
-              Reset to Assigned
+              Reset to Scheduled
             </button>
           )}
         </>

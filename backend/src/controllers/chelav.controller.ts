@@ -69,8 +69,9 @@ export const importSchedule: RequestHandler = async (req, res) => {
   }
 
   // Resolve member names/codes to IDs in bulk
+  // Only include members whose plan does NOT exempt them from chelav rotation.
   const allMembers = await prisma.member.findMany({
-    where: { masjidId, active: true },
+    where: { masjidId, active: true, contributionPlan: { chelavExempt: false } },
     select: { id: true, name: true, memberCode: true },
   });
   const byCode = new Map(allMembers.map(m => [m.memberCode.toLowerCase(), m.id]));

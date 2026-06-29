@@ -7,10 +7,9 @@ export interface MemberSummary {
   phone: string;
   address: string | null;
   contributionPlanId: string;
-  contributionPlan: { id: string; name: string };
+  contributionPlan: { id: string; name: string; chelavExempt: boolean };
   contributionStartDate: string;
   openingDueBalance: string;
-  chelavParticipation: boolean;
   active: boolean;
   createdAt: string;
 }
@@ -32,10 +31,9 @@ export interface EnrichedMember {
   address: string | null;
   active: boolean;
   contributionPlanId: string;
-  contributionPlan: { id: string; name: string };
+  contributionPlan: { id: string; name: string; chelavExempt: boolean };
   contributionStartDate: string;
   openingDueBalance: string;
-  chelavParticipation: boolean;
   createdAt: string;
   totalOutstanding: string;
   overdueMonths: number;

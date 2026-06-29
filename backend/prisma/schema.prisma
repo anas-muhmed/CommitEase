@@ -141,13 +141,14 @@ model MasjidSignupRequest {
 // One plan per fee tier within a masjid (e.g. "General Member", "Chelav").
 // Formerly a single per-masjid fee; now scoped to plans so rates vary by category.
 model ContributionPlan {
-  id          String   @id @default(uuid())
-  masjidId    String
-  name        String
-  description String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  masjidId     String
+  name         String
+  description  String?
+  chelavExempt Boolean  @default(false)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   masjid            Masjid                   @relation(fields: [masjidId], references: [id])
   members           Member[]
@@ -212,8 +213,6 @@ model Member {
   active                Boolean   @default(true)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-
-  chelavParticipation Boolean   @default(true)
 
   masjid           Masjid           @relation(fields: [masjidId], references: [id])
   contributionPlan ContributionPlan @relation(fields: [contributionPlanId], references: [id])

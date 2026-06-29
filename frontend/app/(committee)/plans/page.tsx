@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronLeft, Plus } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { listPlans } from '@/lib/api/plans.api';
+import { ChevronLeft, Plus, UtensilsCrossed } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { listPlans, updatePlan } from '@/lib/api/plans.api';
+import { useAuthStore, hasMinRole } from '@/lib/store/auth.store';
 import { cn } from '@/lib/utils';
 
 function fmt(amount: string) {
@@ -19,6 +20,16 @@ export default function PlansPage() {
     queryKey: ['plans'],
     queryFn: listPlans,
   });
+
+  const qc = useQueryClient();
+  const toggleExempt = useMutation({
+    mutationFn: ({ planId, chelavExempt }: { planId: string; chelavExempt: boolean }) =>
+      updatePlan(planId, { chelavExempt }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['plans'] }); },
+  });
+
+  const committeeRole = useAuthStore(s => s.user?.committeeRole);
+  const isAdmin = hasMinRole(committeeRole, 'ADMIN');
 
   return (
     <div className="flex flex-col">
@@ -76,11 +87,17 @@ export default function PlansPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-base font-semibold truncate">{plan.name}</h2>
                       {!plan.active && (
                         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                           Inactive
+                        </span>
+                      )}
+                      {plan.chelavExempt && (
+                        <span className="flex items-center gap-1 rounded-full bg-[#FFFBEB] border border-[#FDE68A] px-1.5 py-0.5 text-[10px] font-semibold text-[#D97706]">
+                          <UtensilsCrossed size={9} strokeWidth={2.2} />
+                          Chelav Exempt
                         </span>
                       )}
                     </div>
@@ -105,11 +122,28 @@ export default function PlansPage() {
                   <p className="text-xs text-muted-foreground">
                     {plan._count.members} member{plan._count.members !== 1 ? 's' : ''}
                   </p>
-                  {plan.feeHistory.length > 1 && (
-                    <p className="text-[10px] text-muted-foreground">
-                      {plan.feeHistory.length} fee versions
-                    </p>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {plan.feeHistory.length > 1 && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {plan.feeHistory.length} fee versions
+                      </p>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => toggleExempt.mutate({ planId: plan.id, chelavExempt: !plan.chelavExempt })}
+                        disabled={toggleExempt.isPending}
+                        className={cn(
+                          'flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors',
+                          plan.chelavExempt
+                            ? 'border-[#FDE68A] bg-[#FFFBEB] text-[#D97706] hover:bg-[#FEF3C7]'
+                            : 'border-border bg-muted text-muted-foreground hover:bg-muted/80',
+                        )}
+                      >
+                        <UtensilsCrossed size={9} strokeWidth={2.2} />
+                        {plan.chelavExempt ? 'Chelav Exempt' : 'Set Exempt'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );

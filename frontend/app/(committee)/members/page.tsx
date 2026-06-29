@@ -634,8 +634,8 @@ function MemberCard({ member: m, selectMode, selected, onToggleSelect }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="text-[14px] font-semibold text-[#111827] truncate">{m.name}</p>
-          {!m.chelavParticipation && (
-            <span title="Not in chelav rotation">
+          {m.contributionPlan.chelavExempt && (
+            <span title="Chelav Exempt (₹200 plan)">
               <UtensilsCrossed size={12} color="#D97706" strokeWidth={2.2} />
             </span>
           )}

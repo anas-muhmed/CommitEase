@@ -74,9 +74,8 @@ const MEMBER_SELECT = {
   address: true,
   contributionStartDate: true,
   contributionPlanId: true,
-  contributionPlan: { select: { id: true, name: true } },
+  contributionPlan: { select: { id: true, name: true, chelavExempt: true } },
   openingDueBalance: true,
-  chelavParticipation: true,
   appActivated: true,
   lastLoginAt: true,
   active: true,
@@ -94,7 +93,6 @@ export interface CreateMemberInput {
   address?: string;
   openingDueBalance?: number;
   contributionPlanId?: string;
-  chelavParticipation?: boolean;
 }
 
 // ─── Plan resolution ──────────────────────────────────────────────────────────
@@ -145,7 +143,6 @@ export async function createMember(
     contributionStartDate,
     ...(input.address !== undefined && { address: input.address }),
     ...(input.openingDueBalance !== undefined && { openingDueBalance: input.openingDueBalance }),
-    ...(input.chelavParticipation !== undefined && { chelavParticipation: input.chelavParticipation }),
   };
 
   const runCreate = async (tx: Prisma.TransactionClient, memberCode: string) => {
@@ -247,7 +244,6 @@ export async function updateMember(
     address?: string;
     contributionStartDate?: string;
     openingDueBalance?: number;
-    chelavParticipation?: boolean;
   },
 ) {
   const existing = await prisma.member.findUnique({
@@ -278,7 +274,6 @@ export async function updateMember(
         ...(input.address !== undefined && { address: input.address }),
         ...(contributionStartDate !== undefined && { contributionStartDate }),
         ...(input.openingDueBalance !== undefined && { openingDueBalance: input.openingDueBalance }),
-        ...(input.chelavParticipation !== undefined && { chelavParticipation: input.chelavParticipation }),
       },
       select: MEMBER_SELECT,
     });
@@ -753,7 +748,7 @@ export async function listMembersEnriched(masjidId: string) {
         id: true, memberCode: true, name: true, phone: true, address: true,
         active: true, contributionStartDate: true, openingDueBalance: true,
         createdAt: true, contributionPlanId: true,
-        contributionPlan: { select: { id: true, name: true } },
+        contributionPlan: { select: { id: true, name: true, chelavExempt: true } },
         memberPlanHistory: {
           orderBy: { effectiveFrom: 'asc' },
           select: {

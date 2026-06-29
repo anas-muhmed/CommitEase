@@ -166,7 +166,7 @@ function OverviewTab({ memberId }: { memberId: string }) {
           className="flex items-center justify-center gap-2 bg-[#0E7A52] text-white text-[14px] font-bold rounded-[16px] py-4 shadow-[0_4px_16px_rgba(14,122,82,.30)] hover:bg-[#0B6644] active:scale-[0.99] transition-all"
         >
           <CreditCard size={16} />
-          Record Payment
+          Add Payment
         </Link>
       )}
     </div>
@@ -763,7 +763,7 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
             href={`/payments?member=${id}`}
             className="rounded-[12px] bg-[#0C6640] px-4 py-2 text-[12.5px] font-bold text-white shadow-[0_2px_8px_rgba(12,102,64,.25)] shrink-0"
           >
-            Record Payment
+            Add Payment
           </Link>
         )}
       </div>

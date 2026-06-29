@@ -5,6 +5,7 @@ export interface Plan {
   name: string;
   description: string | null;
   active: boolean;
+  chelavExempt: boolean;
   createdAt: string;
   _count: { members: number };
   feeHistory: { monthlyFee: string; effectiveFrom: string }[];
@@ -17,6 +18,14 @@ export async function listPlans(): Promise<Plan[]> {
 
 export async function createPlan(input: { name: string; description?: string }): Promise<Plan> {
   const { data } = await apiClient.post('/committee/plans', input);
+  return data.data as Plan;
+}
+
+export async function updatePlan(
+  planId: string,
+  input: { chelavExempt?: boolean },
+): Promise<Plan> {
+  const { data } = await apiClient.patch(`/committee/plans/${planId}`, input);
   return data.data as Plan;
 }
 
