@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight } from 'lucide-react';
 
 const PORTAL_FONT = "var(--font-inter, 'Inter', -apple-system, sans-serif)";
@@ -64,21 +65,35 @@ const CARDS = [
 
 export default function GatewayPage() {
   return (
-    <div style={{ minHeight: '100dvh', position: 'relative', fontFamily: PORTAL_FONT, overflow: 'hidden' }}>
+    <div style={{ minHeight: '100dvh', position: 'relative', fontFamily: PORTAL_FONT }}>
 
-      {/* Mosque background photo — place file at public/mosque-bg.jpg */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/mosque-bg.jpg"
-        alt=""
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-      />
+      {/*
+        Mosque background — Next.js Image handles:
+        · WebP/AVIF conversion (40-70% smaller than source JPG)
+        · Responsive srcset (mobile gets ~640w, not full 1920w)
+        · priority = adds <link rel="preload"> so it loads with the HTML, not after
+        · quality 78 = sweet spot for photographic content
+        Source file tip: compress to ≤400KB at squoosh.app before deploying.
+      */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
+        <Image
+          src="/mosque-bg.jpg"
+          alt=""
+          fill
+          priority
+          quality={78}
+          sizes="100vw"
+          style={{ objectFit: 'cover', objectPosition: 'center top' }}
+          placeholder="blur"
+          blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAEAAQDASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABQQG/8QAHhAAAAUFAQAAAAAAAAAAAAAAAQIDBAUSITH/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AqUFZSqpqxlDNMVoWZqR8bPAiMVYAAA=="
+        />
+      </div>
 
-      {/* Dark gradient overlay — readable over photo OR plain on its own */}
+      {/* Dark gradient overlay — readable over photo, also the standalone fallback */}
       <div style={{
-        position: 'absolute', inset: 0, zIndex: 1,
-        background: 'linear-gradient(180deg, rgba(3,17,12,0.72) 0%, rgba(6,37,28,0.80) 45%, rgba(3,11,8,0.94) 100%)',
+        position: 'fixed', inset: 0, zIndex: 1,
+        background: 'linear-gradient(180deg, rgba(3,17,12,0.68) 0%, rgba(6,37,28,0.78) 45%, rgba(3,11,8,0.93) 100%)',
+        pointerEvents: 'none',
       }} />
 
       {/* Content */}
