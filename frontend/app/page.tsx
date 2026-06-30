@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Receipt, CalendarDays, BarChart2, ShieldCheck } from 'lucide-react';
 
+
 const FONT = "var(--font-inter, 'Inter', -apple-system, sans-serif)";
 
 const TRUST = [
@@ -51,17 +52,23 @@ export default function GatewayPage() {
 
         {/* ── HEADER ──────────────────────────────────────────────────── */}
         <header style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 52 }}>
-          {/* Logo mark */}
+          {/* Logo icon — app-icon style: white rounded box pops on dark bg */}
           <div style={{
-            width: 58, height: 58, borderRadius: 18,
-            background: 'rgba(255,255,255,0.08)',
-            border: '1px solid rgba(255,255,255,0.14)',
+            width: 72, height: 72, borderRadius: 22,
+            background: '#FFFFFF',
+            boxShadow: '0 10px 36px rgba(0,0,0,0.32), 0 2px 8px rgba(0,0,0,0.18)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            overflow: 'hidden',
             marginBottom: 18,
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
           }}>
-            <MosqueIcon />
+            <Image
+              src="/branding/commitease-icon.png"
+              alt="CommitEase"
+              width={58}
+              height={58}
+              style={{ objectFit: 'contain' }}
+              priority
+            />
           </div>
 
           <h1 style={{ fontSize: 28, fontWeight: 800, color: '#FFFFFF', margin: '0 0 9px', letterSpacing: -0.7, lineHeight: 1 }}>
@@ -165,16 +172,3 @@ export default function GatewayPage() {
   );
 }
 
-// ─── Mosque icon SVG ──────────────────────────────────────────────────────────
-
-function MosqueIcon() {
-  return (
-    <svg viewBox="0 0 32 32" fill="none" style={{ width: 30, height: 30 }}>
-      <path d="M16 3C16 3 11 7 11 11.5V14H8V28H24V14H21V11.5C21 7 16 3 16 3Z" fill="white" fillOpacity="0.92"/>
-      <path d="M4.5 14V28H9.5V14Q7 12.5 4.5 14Z" fill="white" fillOpacity="0.42"/>
-      <path d="M22.5 14V28H27.5V14Q25 12.5 22.5 14Z" fill="white" fillOpacity="0.42"/>
-      <rect x="13.5" y="20" width="5" height="8" rx="1.5" fill="white" fillOpacity="0.38"/>
-      <circle cx="16" cy="2.5" r="1.8" fill="white" fillOpacity="0.62"/>
-    </svg>
-  );
-}
