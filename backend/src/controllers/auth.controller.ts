@@ -7,14 +7,23 @@ import { ApiError } from '../utils/ApiError';
 // Separate cookie names so a user who is both a member and a committee member
 // doesn't have one session overwrite the other.
 const COMMITTEE_REFRESH_COOKIE = 'crt';
-const MEMBER_REFRESH_COOKIE = 'mrt';
+const MEMBER_SESSION_COOKIE = 'mst'; // member session token (raw HMAC pre-image)
 
 function refreshCookieOptions() {
   return {
     httpOnly: true,
     secure: env.nodeEnv === 'production',
     sameSite: 'strict' as const,
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days in ms
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days for committee refresh JWT
+  };
+}
+
+function memberSessionCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: env.nodeEnv === 'production',
+    sameSite: 'strict' as const,
+    maxAge: 90 * 24 * 60 * 60 * 1000, // 90 days for member trusted session
   };
 }
 
@@ -62,6 +71,13 @@ export const committeeLogout: RequestHandler = (_req, res) => {
 
 // ─── Member ───────────────────────────────────────────────────────────────────
 
+export const lookupPhone: RequestHandler = async (req, res) => {
+  const body = req.body as Record<string, unknown>;
+  const phone = requireString(body, 'phone');
+  const masjids = await AuthService.lookupMembersByPhone(phone);
+  sendSuccess(res, { masjids });
+};
+
 export const requestOtp: RequestHandler = async (req, res) => {
   const body = req.body as Record<string, unknown>;
   const masjidCode = requireString(body, 'masjidCode');
@@ -79,21 +95,23 @@ export const verifyOtp: RequestHandler = async (req, res) => {
 
   if (!/^\d{6}$/.test(otp)) throw new ApiError(400, 'otp must be a 6-digit number.');
 
-  const { accessToken, refreshToken } = await AuthService.verifyMemberOtp(masjidCode, phone, otp);
-  res.cookie(MEMBER_REFRESH_COOKIE, refreshToken, refreshCookieOptions());
+  const { accessToken, sessionToken } = await AuthService.verifyMemberOtp(masjidCode, phone, otp);
+  res.cookie(MEMBER_SESSION_COOKIE, sessionToken, memberSessionCookieOptions());
   sendSuccess(res, { accessToken }, 'Login successful.');
 };
 
 export const memberRefresh: RequestHandler = async (req, res) => {
-  const token = req.cookies[MEMBER_REFRESH_COOKIE] as string | undefined;
-  if (!token) throw new ApiError(401, 'No refresh token.');
+  const rawToken = req.cookies[MEMBER_SESSION_COOKIE] as string | undefined;
+  if (!rawToken) throw new ApiError(401, 'No session token.');
 
-  const { accessToken } = await AuthService.refreshMemberToken(token);
+  const { accessToken } = await AuthService.renewMemberSession(rawToken);
   sendSuccess(res, { accessToken }, 'Token refreshed.');
 };
 
-export const memberLogout: RequestHandler = (_req, res) => {
-  res.clearCookie(MEMBER_REFRESH_COOKIE, clearCookieOptions());
+export const memberLogout: RequestHandler = async (req, res) => {
+  const rawToken = req.cookies[MEMBER_SESSION_COOKIE] as string | undefined;
+  if (rawToken) await AuthService.revokeMemberSession(rawToken).catch(() => {});
+  res.clearCookie(MEMBER_SESSION_COOKIE, clearCookieOptions());
   sendSuccess(res, null, 'Logged out.');
 };
 

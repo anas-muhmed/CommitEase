@@ -12,7 +12,8 @@ router.post('/committee/logout', AuthController.committeeLogout);
 // Intentionally NOT behind requirePasswordChange — this is the route that clears the flag.
 router.patch('/committee/change-password', authenticate, AuthController.changePassword);
 
-// Member — OTP request is rate-limited (5 requests per 10 min per IP in Phase 3)
+// Member — OTP flow
+router.post('/member/lookup-phone', AuthController.lookupPhone);
 router.post('/member/request-otp', otpRateLimiter, AuthController.requestOtp);
 router.post('/member/verify-otp', AuthController.verifyOtp);
 router.post('/member/refresh', AuthController.memberRefresh);

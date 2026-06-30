@@ -120,6 +120,7 @@ model Masjid {
   memberSummaries     MemberFinancialSummary[]
   receiptSequence     ReceiptSequence?
   chelavSchedules     ChelavSchedule[]
+  memberSessions      MemberSession[]
 }
 
 model MasjidSignupRequest {
@@ -222,6 +223,7 @@ model Member {
   memberPlanHistory MemberPlanHistory[]
   financialSummary  MemberFinancialSummary?
   chelavSchedules   ChelavSchedule[]
+  memberSessions    MemberSession[]
 
   @@unique([masjidId, memberCode])
   @@unique([masjidId, phone])
@@ -511,4 +513,26 @@ model ChelavSchedule {
 
   @@unique([masjidId, date])
   @@index([masjidId, date])
+}
+
+// ── Member Sessions (trusted device) ─────────────────────────────────────────
+// Created on successful OTP verify. Gives members a 90-day trusted session
+// so OTP is only required on first login / rare re-auth events.
+// tokenHash = HMAC-SHA256(rawCookieValue, jwtRefreshSecret) — raw value never stored.
+
+model MemberSession {
+  id           String    @id @default(uuid())
+  memberId     String
+  masjidId     String
+  tokenHash    String    @unique
+  deviceName   String?
+  lastActiveAt DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  member Member @relation(fields: [memberId], references: [id])
+  masjid Masjid @relation(fields: [masjidId], references: [id])
+
+  @@index([memberId])
 }

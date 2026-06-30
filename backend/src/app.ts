@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.routes';
 import masjidRoutes from './routes/masjid.routes';
 import publicRoutes from './routes/public.routes';
 import committeeRoutes from './routes/committee.routes';
+import portalRoutes from './routes/portal.routes';
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/masjids', masjidRoutes);
 app.use('/api/v1/public', publicRoutes);
 app.use('/api/v1/committee', committeeRoutes);
+app.use('/api/v1/member', portalRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
