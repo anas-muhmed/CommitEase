@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import { lookupPhone, requestMemberOtp, verifyMemberOtp } from '@/lib/api/member-auth.api';
@@ -45,7 +45,9 @@ function LoginInner() {
   const [selectedMasjid, setSelectedMasjid] = useState<MasjidOption | null>(
     prefillCode && prefillName ? { masjidCode: prefillCode, masjidName: prefillName } : null,
   );
-  const [otp, setOtp] = useState('');
+  const [otpDigits, setOtpDigits] = useState<string[]>(['','','','','','']);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const otp = otpDigits.join('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -94,6 +96,40 @@ function LoginInner() {
   async function sendOtp(code: string) {
     await requestMemberOtp(code, phone.trim());
     setResendCooldown(60); setStep('otp');
+  }
+
+  function handleOtpDigit(index: number, value: string) {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    const next = [...otpDigits];
+    next[index] = digit;
+    setOtpDigits(next);
+    if (digit && index < 5) otpRefs.current[index + 1]?.focus();
+  }
+
+  function handleOtpKey(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Backspace') {
+      if (otpDigits[index]) {
+        const next = [...otpDigits];
+        next[index] = '';
+        setOtpDigits(next);
+      } else if (index > 0) {
+        otpRefs.current[index - 1]?.focus();
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  }
+
+  function handleOtpPaste(e: React.ClipboardEvent) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const next = [...otpDigits];
+    pasted.split('').forEach((d, i) => { next[i] = d; });
+    setOtpDigits(next);
+    const focusIdx = Math.min(pasted.length, 5);
+    setTimeout(() => otpRefs.current[focusIdx]?.focus(), 0);
   }
 
   async function handleOtpSubmit() {
@@ -269,21 +305,34 @@ function LoginInner() {
         {step === 'otp' && (
           <>
             <div>
-              <label style={labelStyle}>6-digit code</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="• • • • • •"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                onKeyDown={(e) => e.key === 'Enter' && void handleOtpSubmit()}
-                autoFocus
-                style={{ ...inputStyle, textAlign: 'center', fontSize: 28, fontWeight: 700, letterSpacing: 10 }}
-              />
+              <label style={labelStyle}>Enter 6-digit code</label>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                {[0,1,2,3,4,5].map((i) => (
+                  <input
+                    key={i}
+                    ref={(el) => { otpRefs.current[i] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={2}
+                    value={otpDigits[i] ?? ''}
+                    autoFocus={i === 0}
+                    onChange={(e) => handleOtpDigit(i, e.target.value)}
+                    onKeyDown={(e) => handleOtpKey(i, e)}
+                    onPaste={i === 0 ? handleOtpPaste : undefined}
+                    style={{
+                      width: 46, height: 58, borderRadius: 16, textAlign: 'center',
+                      fontSize: 24, fontWeight: 800, color: '#0F172A', fontFamily: 'inherit',
+                      border: `2px solid ${otpDigits[i] ? '#15803D' : '#E2E8F0'}`,
+                      background: otpDigits[i] ? '#ECFDF5' : '#F8FAFB',
+                      outline: 'none', transition: 'border-color 0.15s, background 0.15s',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                ))}
+              </div>
             </div>
             {error && <ErrorBox msg={error} />}
-            <PrimaryButton onClick={() => void handleOtpSubmit()} loading={loading} disabled={otp.length !== 6}>
+            <PrimaryButton onClick={() => void handleOtpSubmit()} loading={loading} disabled={otp.replace(/\s/g,'').length !== 6}>
               Verify & Continue
             </PrimaryButton>
             <button
