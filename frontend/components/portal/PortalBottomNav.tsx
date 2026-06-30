@@ -1,16 +1,16 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { Home, Clock } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { href: '/portal/home', label: 'Home', icon: Home },
+  { href: '/portal/home',    label: 'Home',    icon: Home  },
   { href: '/portal/history', label: 'History', icon: Clock },
 ];
 
 export default function PortalBottomNav() {
   const pathname = usePathname();
+  const router   = useRouter();
 
   return (
     <nav style={{
@@ -29,15 +29,18 @@ export default function PortalBottomNav() {
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
-            <Link
+            <button
               key={href}
-              href={href}
+              onClick={() => { if (!active) router.replace(href); }}
               style={{
-                flex: 1, display: 'flex', flexDirection: 'column',
+                flex: 1, background: 'none', border: 'none',
+                cursor: active ? 'default' : 'pointer',
+                display: 'flex', flexDirection: 'column',
                 alignItems: 'center', justifyContent: 'center', gap: 5,
-                textDecoration: 'none', position: 'relative',
+                fontFamily: 'inherit', position: 'relative',
               }}
             >
+              {/* Active top line */}
               {active && (
                 <div style={{
                   position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
@@ -45,6 +48,8 @@ export default function PortalBottomNav() {
                   background: '#15803D',
                 }} />
               )}
+
+              {/* Icon */}
               <div style={{
                 width: 36, height: 36, borderRadius: 12,
                 background: active ? '#ECFDF5' : 'transparent',
@@ -53,14 +58,17 @@ export default function PortalBottomNav() {
               }}>
                 <Icon size={20} color={active ? '#15803D' : '#94A3B8'} strokeWidth={active ? 2.2 : 1.8} />
               </div>
+
+              {/* Label */}
               <span style={{
-                fontSize: 11, fontWeight: active ? 700 : 500,
+                fontSize: 11,
+                fontWeight: active ? 700 : 500,
                 color: active ? '#15803D' : '#94A3B8',
                 letterSpacing: active ? 0 : 0.1,
               }}>
                 {label}
               </span>
-            </Link>
+            </button>
           );
         })}
       </div>

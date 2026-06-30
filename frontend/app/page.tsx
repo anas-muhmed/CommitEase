@@ -2,17 +2,9 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, Receipt, CalendarDays, BarChart2, ShieldCheck } from 'lucide-react';
-
+import { ArrowRight } from 'lucide-react';
 
 const FONT = "var(--font-inter, 'Inter', -apple-system, sans-serif)";
-
-const TRUST = [
-  { icon: Receipt,      label: 'Instant Receipts'    },
-  { icon: CalendarDays, label: 'Chelav Schedule'      },
-  { icon: BarChart2,    label: 'Live Dues Tracking'   },
-  { icon: ShieldCheck,  label: 'Secure Access'        },
-];
 
 const BLUR_PLACEHOLDER =
   'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAEAAQDASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABQQG/8QAHhAAAAUFAQAAAAAAAAAAAAAAAQIDBAUSITH/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AqUFZSqpqxlDNMVoWZqR8bPAiMVYAAA==';
@@ -123,25 +115,6 @@ export default function GatewayPage() {
               </div>
             </Link>
           </div>
-        </div>
-
-        {/* ── TRUST PILLS ─────────────────────────────────────────────── */}
-        <div style={{ width: '100%', maxWidth: 400, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {TRUST.map(({ icon: Icon, label }) => (
-            <div key={label} style={{
-              background: 'rgba(255,255,255,0.07)',
-              border: '1px solid rgba(255,255,255,0.10)',
-              borderRadius: 16, padding: '13px 16px',
-              display: 'flex', alignItems: 'center', gap: 10,
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-            }}>
-              <Icon size={15} color="rgba(255,255,255,0.55)" strokeWidth={2} />
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.62)', letterSpacing: -0.1 }}>
-                {label}
-              </span>
-            </div>
-          ))}
         </div>
 
         {/* Flexible spacer — pushes committee footer to bottom */}
