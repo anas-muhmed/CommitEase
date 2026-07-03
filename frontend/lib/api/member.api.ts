@@ -3,6 +3,7 @@ import { memberApiClient } from './member-client';
 // ─── Home ─────────────────────────────────────────────────────────────────────
 
 export interface ActivityEntry {
+  id: string;
   type: 'PAYMENT' | 'REVERSED';
   amount: string;
   paymentMode: string;
@@ -97,6 +98,28 @@ export interface MemberChelavData {
   month: number;
   entries: ChelavEntry[];
 }
+
+// ─── Receipt Detail ───────────────────────────────────────────────────────────
+
+export interface ReceiptDetailData {
+  id: string;
+  receiptNumber: string | null;
+  amount: string;
+  paymentMode: string;
+  date: string;
+  status: string;
+  note: string | null;
+  isReversed: boolean;
+  reversalReason: string | null;
+  allocations: Array<{ month: string; amount: string }>;
+}
+
+export async function getReceiptDetail(receiptId: string): Promise<ReceiptDetailData> {
+  const { data } = await memberApiClient.get(`/member/receipts/${receiptId}`);
+  return data.data as ReceiptDetailData;
+}
+
+// ─── Chelav ───────────────────────────────────────────────────────────────────
 
 export async function getMemberChelav(year?: number, month?: number): Promise<MemberChelavData> {
   const params = year && month ? `?year=${year}&month=${month}` : '';

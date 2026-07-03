@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, ReceiptText, RotateCcw } from 'lucide-react';
 import { getMemberHistory } from '@/lib/api/member.api';
+import PaymentIntentSheet from '@/components/portal/PaymentIntentSheet';
 import type { MonthRecord, ReceiptRecord } from '@/lib/api/member.api';
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
@@ -24,14 +25,15 @@ function fmtMonthLabel(key: string): string {
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
-const STATUS: Record<MonthRecord['status'], { dot: string; color: string }> = {
-  Paid:    { dot: '#22C55E', color: '#16A34A' },
-  Partial: { dot: '#F59E0B', color: '#B45309' },
-  Pending: { dot: '#94A3B8', color: '#64748B' },
-  Overdue: { dot: '#EF4444', color: '#EF4444' },
+const STATUS: Record<MonthRecord['status'], { dot: string; color: string; bg: string }> = {
+  Paid:    { dot: '#22C55E', color: '#16A34A', bg: '#DCFCE7' },
+  Partial: { dot: '#F59E0B', color: '#B45309', bg: '#FEF3C7' },
+  Pending: { dot: '#94A3B8', color: '#64748B', bg: '#F1F5F9' },
+  Overdue: { dot: '#EF4444', color: '#EF4444', bg: '#FEF2F2' },
 };
 
-type Tab = 'monthly' | 'receipts';
+type MainTab    = 'monthly' | 'receipts';
+type FilterTab  = 'all' | 'pending' | 'paid';
 
 // ─── Month Row ────────────────────────────────────────────────────────────────
 
@@ -40,23 +42,23 @@ function MonthRow({ record, isLast }: { record: MonthRecord; isLast: boolean }) 
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
-      padding: '14px 0',
-      borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
+      padding: '13px 0',
+      borderBottom: isLast ? 'none' : '1px solid #F8FAFB',
     }}>
       <div style={{ width: 8, height: 8, borderRadius: '50%', background: cfg.dot, flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 15, fontWeight: 600, color: '#0F172A', margin: '0 0 2px' }}>
+        <p style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', margin: '0 0 1px' }}>
           {fmtMonthLabel(record.month)}
         </p>
         <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>{record.planName}</p>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <p style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 2px' }}>
+        <p style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', margin: '0 0 2px' }}>
           {fmtAmount(record.monthlyDue)}
         </p>
-        <p style={{ fontSize: 12, fontWeight: 600, color: cfg.color, margin: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, background: cfg.bg, padding: '2px 8px', borderRadius: 100 }}>
           {record.status}
-        </p>
+        </span>
       </div>
     </div>
   );
@@ -65,52 +67,60 @@ function MonthRow({ record, isLast }: { record: MonthRecord; isLast: boolean }) 
 // ─── Receipt Row ──────────────────────────────────────────────────────────────
 
 function ReceiptRow({ receipt, isLast }: { receipt: ReceiptRecord; isLast: boolean }) {
+  const router = useRouter();
   const isReversed = receipt.isReversed;
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 14,
-      padding: '14px 0',
-      borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-    }}>
-      {/* Icon */}
-      <div style={{
-        width: 44, height: 44, borderRadius: 13, flexShrink: 0,
-        background: isReversed ? '#FEF2F2' : '#F1F5F9',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        {isReversed
-          ? <RotateCcw size={18} color="#EF4444" />
-          : <ReceiptText size={18} color="#64748B" />
-        }
+    <button
+      onClick={() => router.push(`/portal/receipts/${receipt.id}`)}
+      style={{
+        width: '100%', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '13px 0',
+        borderBottom: isLast ? 'none' : '1px solid #F8FAFB',
+        textAlign: 'left',
+      }}
+    >
+      <div style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, background: isReversed ? '#FEF2F2' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {isReversed ? <RotateCcw size={16} color="#EF4444" /> : <ReceiptText size={16} color="#64748B" />}
       </div>
-
-      {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <p style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', margin: '0 0 1px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {receipt.receiptNumber ?? (isReversed ? 'Reversed' : 'Payment')}
         </p>
         <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>
           {receipt.paymentMode} · {fmtDate(receipt.date)}
         </p>
       </div>
-
-      {/* Amount + badge */}
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <p style={{ fontSize: 15, fontWeight: 800, color: isReversed ? '#EF4444' : '#0F172A', margin: '0 0 4px', letterSpacing: -0.3 }}>
+        <p style={{ fontSize: 14, fontWeight: 700, color: isReversed ? '#EF4444' : '#0F172A', margin: '0 0 3px' }}>
           {fmtAmount(receipt.amount)}
         </p>
-        <span style={{
-          fontSize: 11, fontWeight: 700, borderRadius: 100, padding: '2px 8px',
-          color: isReversed ? '#EF4444' : '#16A34A',
-          background: isReversed ? '#FEF2F2' : '#DCFCE7',
-        }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: isReversed ? '#EF4444' : '#16A34A', background: isReversed ? '#FEF2F2' : '#DCFCE7', padding: '2px 8px', borderRadius: 100 }}>
           {isReversed ? 'Reversed' : 'Paid'}
         </span>
       </div>
+      <ChevronRight size={14} color="#E2E8F0" style={{ flexShrink: 0 }} />
+    </button>
+  );
+}
 
-      <ChevronRight size={15} color="#CBD5E1" style={{ flexShrink: 0 }} />
-    </div>
+// ─── Filter Pill ──────────────────────────────────────────────────────────────
+
+function FilterPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        height: 30, padding: '0 14px', borderRadius: 100, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+        fontSize: 12, fontWeight: 600,
+        background: active ? '#0D3D26' : '#F1F5F9',
+        color: active ? '#FFFFFF' : '#64748B',
+        transition: 'all 0.15s',
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -118,7 +128,9 @@ function ReceiptRow({ receipt, isLast }: { receipt: ReceiptRecord; isLast: boole
 
 export default function PortalHistoryPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('monthly');
+  const [tab, setTab]       = useState<MainTab>('monthly');
+  const [filter, setFilter] = useState<FilterTab>('all');
+  const [showPay, setShowPay] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['member-history'],
@@ -126,64 +138,69 @@ export default function PortalHistoryPage() {
     staleTime: 60_000,
   });
 
+  const outstanding = data?.summary.totalOutstanding ?? '0';
+  const hasOutstanding = parseFloat(outstanding) > 0;
+
+  const filteredMonthly = data?.monthlyRecord.filter((r) => {
+    if (filter === 'paid')    return r.status === 'Paid' || r.status === 'Partial';
+    if (filter === 'pending') return r.status === 'Pending' || r.status === 'Overdue';
+    return true;
+  }) ?? [];
+
   return (
     <div style={{ minHeight: '100dvh', background: '#F8FAFB' }}>
+      <PaymentIntentSheet open={showPay} onClose={() => setShowPay(false)} totalDue={outstanding} />
 
-      {/* ── Sticky header ──────────────────────────────────────────────────── */}
-      <div style={{
-        position: 'sticky', top: 0, zIndex: 30,
-        background: 'rgba(248,250,251,0.96)',
-        backdropFilter: 'blur(12px)',
-        borderBottom: '1px solid rgba(0,0,0,0.06)',
-      }}>
-        {/* Title bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '52px 20px 16px' }}>
-          <button onClick={() => router.back()} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#64748B', display: 'flex', alignItems: 'center', borderRadius: 8 }}>
+      {/* Sticky header */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 30, background: 'rgba(248,250,251,0.97)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '52px 20px 14px' }}>
+          <button onClick={() => router.back()} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#64748B', display: 'flex', borderRadius: 8 }}>
             <ChevronLeft size={22} />
           </button>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: -0.5 }}>History</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: -0.4 }}>History</h1>
         </div>
 
         {/* Stats row */}
-        {isLoading ? (
-          <div style={{ display: 'flex', gap: 0, padding: '0 24px 16px' }}>
-            {[1,2,3].map((i) => <div key={i} style={{ flex: 1, height: 44, background: '#F1F5F9', borderRadius: 10, margin: '0 4px', animation: 'pulse 1.5s ease-in-out infinite' }} />)}
-          </div>
-        ) : data && (
-          <div style={{ display: 'flex', padding: '0 24px 16px', gap: 0 }}>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <p style={{ fontSize: 22, fontWeight: 800, color: parseFloat(data.summary.totalOutstanding) > 0 ? '#EF4444' : '#0F172A', margin: '0 0 3px', letterSpacing: -0.5 }}>
-                {fmtAmount(data.summary.totalOutstanding)}
-              </p>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, fontWeight: 500 }}>Outstanding</p>
-            </div>
-            <div style={{ flex: 1, textAlign: 'center', borderLeft: '1px solid #F1F5F9', borderRight: '1px solid #F1F5F9' }}>
-              <p style={{ fontSize: 22, fontWeight: 800, color: '#15803D', margin: '0 0 3px', letterSpacing: -0.5 }}>
-                {fmtAmount(data.summary.totalPaid)}
-              </p>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, fontWeight: 500 }}>Total Paid</p>
-            </div>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <p style={{ fontSize: 22, fontWeight: 800, color: data.summary.overdueMonths > 0 ? '#EF4444' : '#64748B', margin: '0 0 3px', letterSpacing: -0.5 }}>
-                {data.summary.overdueMonths}
-              </p>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, fontWeight: 500 }}>Overdue Months</p>
-            </div>
+        {!isLoading && data && (
+          <div style={{ display: 'flex', padding: '0 20px 14px', gap: 0 }}>
+            {[
+              { label: 'Outstanding', value: fmtAmount(data.summary.totalOutstanding), red: parseFloat(data.summary.totalOutstanding) > 0 },
+              { label: 'Total Paid',  value: fmtAmount(data.summary.totalPaid),        red: false, green: true },
+              { label: 'Overdue',     value: `${data.summary.overdueMonths} mo`,       red: data.summary.overdueMonths > 0 },
+            ].map(({ label, value, red, green }, i, arr) => (
+              <div key={label} style={{ flex: 1, textAlign: 'center', borderLeft: i > 0 ? '1px solid #F1F5F9' : 'none' }}>
+                <p style={{ fontSize: 20, fontWeight: 800, color: red ? '#EF4444' : green ? '#15803D' : '#0F172A', margin: '0 0 2px', letterSpacing: -0.5 }}>
+                  {value}
+                </p>
+                <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, fontWeight: 500 }}>{label}</p>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Tab underline switcher */}
+        {/* Pay Now strip — only when outstanding */}
+        {!isLoading && hasOutstanding && (
+          <div style={{ padding: '0 20px 14px' }}>
+            <button
+              onClick={() => setShowPay(true)}
+              style={{ width: '100%', height: 42, borderRadius: 12, background: 'linear-gradient(135deg, #15803D 0%, #0E6B43 100%)', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, color: '#FFFFFF', boxShadow: '0 4px 16px rgba(21,128,61,0.25)' }}
+            >
+              Pay Now — {fmtAmount(outstanding)}
+            </button>
+          </div>
+        )}
+
+        {/* Main tab underline */}
         <div style={{ display: 'flex', borderBottom: '1px solid #F1F5F9' }}>
-          {(['monthly', 'receipts'] as Tab[]).map((t) => (
+          {(['monthly', 'receipts'] as MainTab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               style={{
-                flex: 1, height: 44, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                flex: 1, height: 42, border: 'none', borderBottom: tab === t ? '2px solid #0D3D26' : '2px solid transparent',
+                background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
                 fontSize: 14, fontWeight: tab === t ? 700 : 500,
-                color: tab === t ? '#15803D' : '#94A3B8',
-                background: 'transparent',
-                borderBottom: tab === t ? '2.5px solid #15803D' : '2.5px solid transparent',
+                color: tab === t ? '#0F172A' : '#94A3B8',
                 transition: 'all 0.15s',
               }}
             >
@@ -193,39 +210,44 @@ export default function PortalHistoryPage() {
         </div>
       </div>
 
-      {/* ── Content ────────────────────────────────────────────────────────── */}
-      <div style={{ padding: '8px 20px 24px' }}>
-
+      {/* Content */}
+      <div style={{ padding: '16px 20px 24px' }}>
         {isLoading && (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {[1,2,3,4,5].map((i) => (
-              <div key={i} style={{ height: 68, borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F1F5F9' }} />
-                <div style={{ flex: 1, height: 14, background: '#F1F5F9', borderRadius: 6, animation: 'pulse 1.5s ease-in-out infinite' }} />
-              </div>
+              <div key={i} style={{ height: 60, background: '#FFFFFF', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
             ))}
           </div>
         )}
 
-        {/* Monthly record */}
-        {data && tab === 'monthly' && (
-          data.monthlyRecord.length === 0 ? (
-            <p style={{ fontSize: 15, color: '#94A3B8', textAlign: 'center', padding: '40px 0' }}>No records yet</p>
-          ) : (
-            <div>
-              {data.monthlyRecord.map((r, i) => (
-                <MonthRow key={r.month} record={r} isLast={i === data.monthlyRecord.length - 1} />
-              ))}
+        {/* Monthly record tab */}
+        {!isLoading && data && tab === 'monthly' && (
+          <>
+            {/* Filter pills */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <FilterPill label="All"     active={filter === 'all'}     onClick={() => setFilter('all')} />
+              <FilterPill label="Pending" active={filter === 'pending'} onClick={() => setFilter('pending')} />
+              <FilterPill label="Paid"    active={filter === 'paid'}    onClick={() => setFilter('paid')} />
             </div>
-          )
+
+            {filteredMonthly.length === 0 ? (
+              <p style={{ fontSize: 14, color: '#94A3B8', textAlign: 'center', padding: '40px 0', margin: 0 }}>No records match this filter</p>
+            ) : (
+              <div style={{ background: '#FFFFFF', borderRadius: 16, padding: '0 16px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                {filteredMonthly.map((r, i) => (
+                  <MonthRow key={r.month} record={r} isLast={i === filteredMonthly.length - 1} />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
-        {/* Receipts */}
-        {data && tab === 'receipts' && (
+        {/* Receipts tab */}
+        {!isLoading && data && tab === 'receipts' && (
           data.receipts.length === 0 ? (
-            <p style={{ fontSize: 15, color: '#94A3B8', textAlign: 'center', padding: '40px 0' }}>No receipts yet</p>
+            <p style={{ fontSize: 14, color: '#94A3B8', textAlign: 'center', padding: '40px 0', margin: 0 }}>No receipts yet</p>
           ) : (
-            <div>
+            <div style={{ background: '#FFFFFF', borderRadius: 16, padding: '0 16px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
               {data.receipts.map((r, i) => (
                 <ReceiptRow key={r.id} receipt={r} isLast={i === data.receipts.length - 1} />
               ))}

@@ -33,4 +33,13 @@ router.get('/chelav', async (req, res) => {
   sendSuccess(res, data);
 });
 
+router.get('/receipts/:id', async (req, res) => {
+  const data = await PortalService.getMemberReceiptDetail(
+    req.member!.id,
+    req.member!.masjidId,
+    req.params.id,
+  );
+  sendSuccess(res, data);
+});
+
 export default router;

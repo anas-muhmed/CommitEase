@@ -65,6 +65,7 @@ function buildActivityEntry(p: PaymentRow) {
   }
 
   return {
+    id: p.id,
     type: isReversed ? 'REVERSED' as const : 'PAYMENT' as const,
     amount: p.amount.toFixed(2),
     paymentMode: MODE_LABEL[p.paymentMode] ?? p.paymentMode,
@@ -226,6 +227,44 @@ export async function getMemberHistory(memberId: string, masjidId: string) {
     },
     monthlyRecord,
     receipts,
+  };
+}
+
+// ─── getMemberReceiptDetail ───────────────────────────────────────────────────
+
+export async function getMemberReceiptDetail(memberId: string, masjidId: string, receiptId: string) {
+  const payment = await prisma.payment.findFirst({
+    where: { id: receiptId, memberId, masjidId },
+    select: {
+      id: true, amount: true, paymentMode: true, paymentStatus: true,
+      paymentDate: true, createdAt: true, note: true,
+      receipt: { select: { receiptNumber: true, generatedAt: true } },
+      reversal: { select: { reason: true, reversedAt: true } },
+      allocations: {
+        select: { contributionMonth: true, amountAllocated: true },
+        orderBy: { contributionMonth: 'asc' },
+      },
+    },
+  });
+
+  if (!payment) throw new ApiError(404, 'Receipt not found.');
+
+  return {
+    id: payment.id,
+    receiptNumber: payment.receipt?.receiptNumber ?? null,
+    amount: payment.amount.toFixed(2),
+    paymentMode: MODE_LABEL[payment.paymentMode] ?? payment.paymentMode,
+    date: (payment.paymentDate ?? payment.createdAt).toISOString(),
+    status: payment.paymentStatus as string,
+    note: payment.note ?? null,
+    isReversed: payment.paymentStatus === PaymentStatus.REVERSED,
+    reversalReason: payment.reversal?.reason ?? null,
+    allocations: payment.allocations
+      .filter((a) => a.contributionMonth != null)
+      .map((a) => ({
+        month: fmtContribMonth(a.contributionMonth!),
+        amount: a.amountAllocated.toFixed(2),
+      })),
   };
 }
 
