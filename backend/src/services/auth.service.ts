@@ -1,7 +1,8 @@
+import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { Prisma, MasjidStatus } from '@prisma/client';
-import type { UserRole } from '@prisma/client';
+import type { UserRole, CommitteeRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { ApiError } from '../utils/ApiError';
@@ -13,6 +14,8 @@ interface UserAccessPayload {
   sub: string;
   masjidId: string | null;
   role: UserRole;
+  committeeRole: CommitteeRole;
+  mustChangePassword: boolean;
   type: 'user';
 }
 
@@ -36,6 +39,8 @@ const OTP_BCRYPT_ROUNDS = 10;
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_BLOCK_DURATION_MS = 15 * 60 * 1000; // 15-minute block after max failed attempts
 
+const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90-day trusted device session
+
 // A valid bcrypt hash used when the user is not found — ensures bcrypt.compare
 // always runs so that response time does not reveal whether an account exists.
 const DUMMY_HASH = '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
@@ -44,6 +49,10 @@ const DUMMY_HASH = '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
 
 function maskPhone(phone: string): string {
   return phone.length > 4 ? '*'.repeat(phone.length - 4) + phone.slice(-4) : '****';
+}
+
+function hashSessionToken(raw: string): string {
+  return crypto.createHmac('sha256', env.jwtRefreshSecret).update(raw).digest('hex');
 }
 
 function signAccessToken(payload: UserAccessPayload | MemberAccessPayload): string {
@@ -102,7 +111,7 @@ export async function committeeLogin(masjidCode: string, username: string, passw
   });
 
   return {
-    accessToken: signAccessToken({ sub: user.id, masjidId: user.masjidId, role: user.role, type: 'user' }),
+    accessToken: signAccessToken({ sub: user.id, masjidId: user.masjidId, role: user.role, committeeRole: user.committeeRole, mustChangePassword: user.mustChangePassword, type: 'user' }),
     refreshToken: signRefreshToken(user.id, 'user'),
     mustChangePassword: user.mustChangePassword,
   };
@@ -118,7 +127,7 @@ export async function refreshCommitteeToken(token: string) {
   if (!user || !user.active) throw new ApiError(401, 'Account not found or inactive.');
 
   return {
-    accessToken: signAccessToken({ sub: user.id, masjidId: user.masjidId, role: user.role, type: 'user' }),
+    accessToken: signAccessToken({ sub: user.id, masjidId: user.masjidId, role: user.role, committeeRole: user.committeeRole, mustChangePassword: user.mustChangePassword, type: 'user' }),
   };
 }
 
@@ -240,26 +249,66 @@ export async function verifyMemberOtp(masjidCode: string, phone: string, otp: st
     });
   });
 
+  // Create long-lived trusted device session (90 days).
+  const rawSessionToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashSessionToken(rawSessionToken);
+  await prisma.memberSession.create({
+    data: {
+      memberId: member.id,
+      masjidId: member.masjidId,
+      tokenHash,
+      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+    },
+  });
+
   logger.info('auth.member.otp.verify.success', { memberId: member.id, masjidId: member.masjidId });
 
   return {
     accessToken: signAccessToken({ sub: member.id, masjidId: member.masjidId, type: 'member' }),
-    refreshToken: signRefreshToken(member.id, 'member'),
+    sessionToken: rawSessionToken,
   };
 }
 
-export async function refreshMemberToken(token: string) {
-  const payload = verifyRefreshToken(token);
-  if (payload.type !== 'refresh' || payload.entityType !== 'member') {
-    throw new ApiError(401, 'Invalid token type.');
-  }
+export async function renewMemberSession(rawToken: string) {
+  const tokenHash = hashSessionToken(rawToken);
+  const session = await prisma.memberSession.findUnique({
+    where: { tokenHash },
+    include: { member: { select: { id: true, masjidId: true, active: true } } },
+  });
 
-  const member = await prisma.member.findUnique({ where: { id: payload.sub } });
-  if (!member || !member.active) throw new ApiError(401, 'Account not found or inactive.');
+  if (!session || session.revokedAt || session.expiresAt < new Date()) {
+    throw new ApiError(401, 'Session expired or revoked. Please log in again.');
+  }
+  if (!session.member.active) throw new ApiError(401, 'Account not found or inactive.');
+
+  await prisma.memberSession.update({
+    where: { id: session.id },
+    data: { lastActiveAt: new Date() },
+  });
 
   return {
-    accessToken: signAccessToken({ sub: member.id, masjidId: member.masjidId, type: 'member' }),
+    accessToken: signAccessToken({ sub: session.member.id, masjidId: session.member.masjidId, type: 'member' }),
   };
+}
+
+export async function revokeMemberSession(rawToken: string) {
+  const tokenHash = hashSessionToken(rawToken);
+  const session = await prisma.memberSession.findUnique({ where: { tokenHash } });
+  if (session && !session.revokedAt) {
+    await prisma.memberSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
+  }
+}
+
+// Returns masjids where this phone number is registered (for multi-mosque login flow).
+// Only returns masjid name + code — no member details.
+export async function lookupMembersByPhone(phone: string) {
+  const members = await prisma.member.findMany({
+    where: { phone, active: true },
+    select: { masjid: { select: { code: true, name: true, status: true } } },
+  });
+  return members
+    .filter((m) => m.masjid.status === MasjidStatus.ACTIVE)
+    .map((m) => ({ masjidCode: m.masjid.code, masjidName: m.masjid.name }));
 }
 
 // ─── Password change ─────────────────────────────────────────────────────────
@@ -291,44 +340,3 @@ export async function changePassword(
   });
 }
 
-// ─── Device-Trust Architecture (Planned — Phase 5) ───────────────────────────
-//
-// Current: member refresh tokens are stateless 30-day JWTs. Logout clears the
-// cookie client-side but the token stays mathematically valid until expiry.
-// Members re-authenticate via OTP every 30 days. For non-technical users who
-// open the app infrequently, this is unacceptable UX.
-//
-// New product rule:
-//   - OTP required only on first login or explicit re-authentication
-//   - Successful OTP verify creates a MemberSession (trusted device record)
-//   - Sessions auto-refresh on activity; hard expiry at 90 days
-//   - Re-auth required only when: 90-day expiry, explicit logout,
-//     committee revocation, or suspicious invalidation
-//
-// Planned MemberSession schema (add in Phase 5):
-//   model MemberSession {
-//     id           String    @id @default(uuid())
-//     memberId     String
-//     masjidId     String
-//     tokenHash    String    @unique   -- HMAC-SHA256 of the cookie value
-//     deviceName   String?             -- from User-Agent (e.g. "Samsung A51")
-//     lastActiveAt DateTime            -- updated on each refresh
-//     expiresAt    DateTime            -- 90 days from creation, non-sliding
-//     revokedAt    DateTime?           -- set by committee to force re-auth
-//     createdAt    DateTime  @default(now())
-//   }
-//
-// Implementation changes (Phase 5):
-//   - verifyMemberOtp: after transaction, create MemberSession, set mrt cookie
-//     to crypto.randomBytes(32).toString('hex') (the pre-hash value)
-//   - memberRefresh: replace JWT verification with DB session lookup by
-//     HMAC(mrt cookie value) → confirm not revoked, not expired →
-//     update lastActiveAt → issue new access token
-//   - memberLogout: set revokedAt = now() on the session
-//   - Phase 8: committee panel shows active sessions per member, can revoke
-//
-// Security notes:
-//   - tokenHash = HMAC-SHA256(rawToken, HMAC_SECRET env var)
-//   - Cookie remains HttpOnly; Secure; SameSite=Strict
-//   - Max-Age = 90 days (browser enforces hard limit independently)
-// ─────────────────────────────────────────────────────────────────────────────

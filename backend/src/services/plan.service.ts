@@ -2,21 +2,23 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/ApiError';
 import { logAudit } from './audit.service';
+import { upsertMemberSummary } from './member.service';
 
 // ─── Plan CRUD ────────────────────────────────────────────────────────────────
 
 export async function createPlan(
   masjidId: string,
   actorId: string,
-  input: { name: string; description?: string },
+  input: { name: string; description?: string; chelavExempt?: boolean },
 ) {
   const plan = await prisma.contributionPlan.create({
     data: {
       masjidId,
       name: input.name,
       ...(input.description !== undefined && { description: input.description }),
+      ...(input.chelavExempt !== undefined && { chelavExempt: input.chelavExempt }),
     },
-    select: { id: true, masjidId: true, name: true, description: true, active: true, createdAt: true },
+    select: { id: true, masjidId: true, name: true, description: true, chelavExempt: true, active: true, createdAt: true },
   });
 
   await logAudit({
@@ -31,7 +33,7 @@ export async function listPlans(masjidId: string) {
   return prisma.contributionPlan.findMany({
     where: { masjidId },
     select: {
-      id: true, name: true, description: true, active: true, createdAt: true,
+      id: true, name: true, description: true, chelavExempt: true, active: true, createdAt: true,
       _count: { select: { members: true } },
       feeHistory: {
         orderBy: { effectiveFrom: 'desc' },
@@ -47,7 +49,7 @@ export async function getPlanById(masjidId: string, planId: string) {
   const plan = await prisma.contributionPlan.findUnique({
     where: { id: planId, masjidId },
     select: {
-      id: true, name: true, description: true, active: true, createdAt: true, updatedAt: true,
+      id: true, name: true, description: true, chelavExempt: true, active: true, createdAt: true, updatedAt: true,
       _count: { select: { members: true } },
       feeHistory: {
         orderBy: { effectiveFrom: 'desc' },
@@ -63,11 +65,11 @@ export async function updatePlan(
   masjidId: string,
   planId: string,
   actorId: string,
-  input: { name?: string; description?: string; active?: boolean },
+  input: { name?: string; description?: string; chelavExempt?: boolean; active?: boolean },
 ) {
   const existing = await prisma.contributionPlan.findUnique({
     where: { id: planId, masjidId },
-    select: { id: true, name: true, description: true, active: true },
+    select: { id: true, name: true, description: true, chelavExempt: true, active: true },
   });
   if (!existing) throw new ApiError(404, 'Contribution plan not found.');
 
@@ -76,9 +78,10 @@ export async function updatePlan(
     data: {
       ...(input.name !== undefined && { name: input.name }),
       ...(input.description !== undefined && { description: input.description }),
+      ...(input.chelavExempt !== undefined && { chelavExempt: input.chelavExempt }),
       ...(input.active !== undefined && { active: input.active }),
     },
-    select: { id: true, name: true, description: true, active: true, updatedAt: true },
+    select: { id: true, name: true, description: true, chelavExempt: true, active: true, updatedAt: true },
   });
 
   await logAudit({
@@ -139,5 +142,8 @@ export async function switchMemberPlan(
     }, tx);
 
     return { historyId: history.id, newPlanId, newPlanName: newPlan.name, effectiveFrom };
+  }).then(result => {
+    void upsertMemberSummary(masjidId, memberId);
+    return result;
   });
 }

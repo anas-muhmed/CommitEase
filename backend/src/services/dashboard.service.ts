@@ -1,38 +1,6 @@
 import { Prisma, PaymentStatus } from '@prisma/client';
 import { prisma } from '../config/database';
-import { getLedger } from './member.service';
-
-// ─── Shared: batch-compute ledgers for all active members ────────────────────
-// Runs in parallel batches of 20 to avoid flooding the DB connection pool.
-// Returns member metadata alongside each ledger so callers don't need a
-// second query to get phone/memberCode.
-
-const LEDGER_BATCH_SIZE = 20;
-
-type MemberLedgerPair = {
-  member: { id: string; memberCode: string; name: string; phone: string };
-  ledger: Awaited<ReturnType<typeof getLedger>>;
-};
-
-async function computeActiveMemberLedgers(masjidId: string): Promise<MemberLedgerPair[]> {
-  const members = await prisma.member.findMany({
-    where: { masjidId, active: true },
-    select: { id: true, memberCode: true, name: true, phone: true },
-    orderBy: { name: 'asc' },
-  });
-
-  const results: MemberLedgerPair[] = [];
-
-  for (let i = 0; i < members.length; i += LEDGER_BATCH_SIZE) {
-    const batch = members.slice(i, i + LEDGER_BATCH_SIZE);
-    const batchResults = await Promise.all(
-      batch.map(async (m) => ({ member: m, ledger: await getLedger(masjidId, m.id) })),
-    );
-    results.push(...batchResults);
-  }
-
-  return results;
-}
+import { getFinancialSummary, computeActiveMemberLedgers } from './finance.service';
 
 // ─── Severity classification ──────────────────────────────────────────────────
 
@@ -53,7 +21,7 @@ export async function getDashboard(masjidId: string) {
   const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   const yearEnd = new Date(Date.UTC(now.getUTCFullYear() + 1, 0, 1));
 
-  // Fast SQL stats — run in parallel with ledger computation.
+  // Fast SQL stats — run in parallel with financial summary (which includes treasury + member ledgers).
   const [
     activeMembers,
     inactiveMembers,
@@ -61,7 +29,7 @@ export async function getDashboard(masjidId: string) {
     collectionThisYear,
     recentPayments,
     recentReversals,
-    allLedgers,
+    financialSummary,
   ] = await Promise.all([
     prisma.member.count({ where: { masjidId, active: true } }),
 
@@ -94,7 +62,7 @@ export async function getDashboard(masjidId: string) {
         amount: true,
         paymentDate: true,
         createdAt: true,
-        member: { select: { name: true, memberCode: true } },
+        member: { select: { id: true, name: true, memberCode: true } },
         receipt: { select: { receiptNumber: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -114,13 +82,10 @@ export async function getDashboard(masjidId: string) {
       take: 5,
     }),
 
-    computeActiveMemberLedgers(masjidId),
+    getFinancialSummary(masjidId),
   ]);
 
-  const totalOutstanding = allLedgers.reduce(
-    (sum, { ledger }) => sum.add(new Prisma.Decimal(ledger.totalOutstanding)),
-    new Prisma.Decimal(0),
-  );
+  const { allLedgers, pendingDues, ...treasury } = financialSummary;
 
   return {
     members: { active: activeMembers, inactive: inactiveMembers },
@@ -134,9 +99,10 @@ export async function getDashboard(masjidId: string) {
         paymentCount: collectionThisYear._count._all,
       },
     },
-    totalOutstandingAllMembers: totalOutstanding.toFixed(2),
+    totalOutstandingAllMembers: pendingDues,
     recentPayments,
     recentReversals,
+    treasury,
   };
 }
 
@@ -208,8 +174,6 @@ export async function getCollectionReport(masjidId: string, year: number) {
 // ─── Overdue members report ───────────────────────────────────────────────────
 
 export async function getOverdueReport(masjidId: string) {
-  const allLedgers = await computeActiveMemberLedgers(masjidId);
-
   type OverdueMember = {
     memberId: string;
     memberCode: string;
@@ -224,30 +188,65 @@ export async function getOverdueReport(masjidId: string) {
   let summaryMild = 0, summarySerious = 0, summaryCritical = 0;
   let grandTotalOutstanding = new Prisma.Decimal(0);
 
-  for (const { member, ledger } of allLedgers) {
-    const outstanding = new Prisma.Decimal(ledger.totalOutstanding);
-    if (outstanding.lessThanOrEqualTo(0)) continue;
+  const [activeMemberCount, summaryCount] = await Promise.all([
+    prisma.member.count({ where: { masjidId, active: true } }),
+    prisma.memberFinancialSummary.count({ where: { masjidId, member: { active: true } } }),
+  ]);
 
-    const overdueMonths = ledger.rows.filter(
-      (r) => new Prisma.Decimal(r.outstanding).greaterThan(0),
-    ).length;
-
-    const severity = classifySeverity(overdueMonths);
-
-    overdue.push({
-      memberId: member.id,
-      memberCode: member.memberCode,
-      name: member.name,
-      phone: member.phone,
-      totalOutstanding: outstanding.toFixed(2),
-      overdueMonths,
-      severity,
+  if (activeMemberCount > 0 && summaryCount === activeMemberCount) {
+    // Fast path: read from pre-computed summary table (O(1) per query).
+    const summaries = await prisma.memberFinancialSummary.findMany({
+      where: {
+        masjidId,
+        member: { active: true },
+        totalOutstanding: { gt: 0 },
+      },
+      include: {
+        member: { select: { memberCode: true, name: true, phone: true } },
+      },
     });
 
-    grandTotalOutstanding = grandTotalOutstanding.add(outstanding);
-    if (severity === 'mild') summaryMild++;
-    else if (severity === 'serious') summarySerious++;
-    else summaryCritical++;
+    for (const s of summaries) {
+      const outstanding = new Prisma.Decimal(s.totalOutstanding);
+      const severity = classifySeverity(s.overdueMonths);
+      overdue.push({
+        memberId: s.memberId,
+        memberCode: s.member.memberCode,
+        name: s.member.name,
+        phone: s.member.phone,
+        totalOutstanding: outstanding.toFixed(2),
+        overdueMonths: s.overdueMonths,
+        severity,
+      });
+      grandTotalOutstanding = grandTotalOutstanding.add(outstanding);
+      if (severity === 'mild') summaryMild++;
+      else if (severity === 'serious') summarySerious++;
+      else summaryCritical++;
+    }
+  } else {
+    // Fallback: compute from ledgers for masjids where summaries are incomplete.
+    const allLedgers = await computeActiveMemberLedgers(masjidId);
+    for (const { member, ledger } of allLedgers) {
+      const outstanding = new Prisma.Decimal(ledger.totalOutstanding);
+      if (outstanding.lessThanOrEqualTo(0)) continue;
+      const overdueMonths = ledger.rows.filter(
+        (r) => new Prisma.Decimal(r.outstanding).greaterThan(0),
+      ).length;
+      const severity = classifySeverity(overdueMonths);
+      overdue.push({
+        memberId: member.id,
+        memberCode: member.memberCode,
+        name: member.name,
+        phone: member.phone,
+        totalOutstanding: outstanding.toFixed(2),
+        overdueMonths,
+        severity,
+      });
+      grandTotalOutstanding = grandTotalOutstanding.add(outstanding);
+      if (severity === 'mild') summaryMild++;
+      else if (severity === 'serious') summarySerious++;
+      else summaryCritical++;
+    }
   }
 
   // Sort: critical first, then by outstanding amount descending.

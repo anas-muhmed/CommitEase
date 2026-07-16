@@ -2,7 +2,33 @@ import { Prisma, PaymentStatus } from '@prisma/client';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/ApiError';
 import { logAudit } from './audit.service';
-import { getLedger } from './member.service';
+import { getLedger, upsertMemberSummary } from './member.service';
+
+// Helper used by both reversal and transfer to write the net-zero REVERSAL ledger entries.
+async function writeFundReversalLedger(
+  tx: Prisma.TransactionClient,
+  masjidId: string,
+  accountId: string,
+  amount: Prisma.Decimal,
+  direction: 'CREDIT' | 'DEBIT',
+  note: string,
+  referenceId: string,
+  actorId: string,
+) {
+  await tx.treasuryLedger.create({
+    data: {
+      masjidId,
+      accountId,
+      entryType: 'REVERSAL',
+      direction,
+      amount,
+      note,
+      referenceId,
+      referenceType: 'PAYMENT',
+      createdByUserId: actorId,
+    },
+  });
+}
 
 // ─── Reversal ─────────────────────────────────────────────────────────────────
 
@@ -21,6 +47,7 @@ export async function reversePayment(
       memberId: true,
       amount: true,
       paymentStatus: true,
+      fundAccountId: true,
       receipt: { select: { id: true } },
     },
   });
@@ -61,6 +88,18 @@ export async function reversePayment(
       });
     }
 
+    // Treasury reversal: undo the original CREDIT that was applied when the payment succeeded.
+    if (payment.fundAccountId) {
+      await tx.fundAccount.update({
+        where: { id: payment.fundAccountId },
+        data: { currentBalance: { decrement: payment.amount } },
+      });
+      await writeFundReversalLedger(
+        tx, masjidId, payment.fundAccountId, payment.amount,
+        'DEBIT', `Payment reversed — ${reason}`, paymentId, actorId,
+      );
+    }
+
     await logAudit(
       {
         masjidId,
@@ -68,12 +107,16 @@ export async function reversePayment(
         action: 'PAYMENT_REVERSED',
         entityType: 'Payment',
         entityId: paymentId,
-        newValue: { reason, amount: payment.amount.toFixed(2), reversedAt: reversal.reversedAt.toISOString() },
+        oldValue: { status: 'SUCCESS', amount: payment.amount.toFixed(2), fundAccountId: payment.fundAccountId ?? null },
+        newValue: { status: 'REVERSED', reason, reversedAt: reversal.reversedAt.toISOString() },
       },
       tx,
     );
 
     return { reversalId: reversal.id, paymentId, reason, reversedAt: reversal.reversedAt };
+  }).then(result => {
+    void upsertMemberSummary(masjidId, memberId);
+    return result;
   });
 }
 
@@ -116,6 +159,7 @@ export async function transferPayment(
       paymentMode: true,
       paymentStatus: true,
       paymentDate: true,
+      fundAccountId: true,
       receipt: { select: { id: true } },
     },
   });
@@ -136,13 +180,21 @@ export async function transferPayment(
     );
   }
 
-  // FIFO allocation for the destination member — computed outside the transaction
-  // (optimistic; unique constraints catch any race condition at write time).
+  // FIFO allocation for the destination member — computed outside the transaction.
   const destLedger = await getLedger(masjidId, toMemberId);
 
   let remaining = payment.amount;
-  const allocations: Array<{ contributionMonth: Date; amountAllocated: Prisma.Decimal }> = [];
+  const allocations: Array<{ contributionMonth: Date | null; amountAllocated: Prisma.Decimal }> = [];
 
+  // Priority 1: clear old due for destination member.
+  const effectiveOldDue = new Prisma.Decimal(destLedger.effectiveOpeningDue);
+  if (effectiveOldDue.greaterThan(0)) {
+    const toOld = remaining.lessThanOrEqualTo(effectiveOldDue) ? remaining : effectiveOldDue;
+    allocations.push({ contributionMonth: null, amountAllocated: toOld });
+    remaining = remaining.sub(toOld);
+  }
+
+  // Priority 2: oldest monthly dues.
   for (const row of destLedger.rows) {
     if (remaining.lessThanOrEqualTo(0)) break;
     const outstanding = new Prisma.Decimal(row.outstanding);
@@ -175,11 +227,20 @@ export async function transferPayment(
       });
     }
 
-    // 4. New receipt number for the destination payment.
-    const receiptCount = await tx.receipt.count({ where: { masjidId } });
-    const receiptNumber = `RCP-${String(receiptCount + 1).padStart(5, '0')}`;
+    // 4. Atomic receipt number for the destination payment.
+    await tx.$executeRaw`
+      INSERT INTO "ReceiptSequence" ("masjidId", "lastNumber")
+      VALUES (${masjidId}, 1)
+      ON CONFLICT ("masjidId") DO UPDATE
+      SET "lastNumber" = "ReceiptSequence"."lastNumber" + 1
+    `;
+    const seq = await tx.receiptSequence.findUniqueOrThrow({
+      where: { masjidId },
+      select: { lastNumber: true },
+    });
+    const receiptNumber = `RCP-${String(seq.lastNumber).padStart(5, '0')}`;
 
-    // 5. Fresh payment row for the destination member (Rule 4).
+    // 5. Fresh payment row for the destination member (Rule 4), inheriting fundAccountId.
     const newPayment = await tx.payment.create({
       data: {
         masjidId,
@@ -189,6 +250,7 @@ export async function transferPayment(
         paymentStatus: PaymentStatus.SUCCESS,
         paymentDate: payment.paymentDate,
         recordedByUserId: actorId,
+        ...(payment.fundAccountId !== null && payment.fundAccountId !== undefined && { fundAccountId: payment.fundAccountId }),
         note: `Transferred from ${fromMember.name} (${fromMember.memberCode}): ${reason}`,
         allocations: {
           create: allocations.map((a) => ({
@@ -213,6 +275,18 @@ export async function transferPayment(
       data: { masjidId, paymentId: newPayment.id, receiptNumber },
       select: { id: true, receiptNumber: true, generatedAt: true },
     });
+
+    // Net-zero ledger: DEBIT the old payment attribution, CREDIT the new one (same account).
+    if (payment.fundAccountId) {
+      await writeFundReversalLedger(
+        tx, masjidId, payment.fundAccountId, payment.amount,
+        'DEBIT', `Transfer out — from ${fromMember.name} to ${toMember.name}: ${reason}`, paymentId, actorId,
+      );
+      await writeFundReversalLedger(
+        tx, masjidId, payment.fundAccountId, payment.amount,
+        'CREDIT', `Transfer in — from ${fromMember.name} to ${toMember.name}: ${reason}`, newPayment.id, actorId,
+      );
+    }
 
     await logAudit(
       {
@@ -241,5 +315,9 @@ export async function transferPayment(
       newReceipt,
       unallocatedAmount: remaining.toFixed(2),
     };
+  }).then(result => {
+    void upsertMemberSummary(masjidId, fromMemberId);
+    void upsertMemberSummary(masjidId, toMemberId);
+    return result;
   });
 }

@@ -51,9 +51,11 @@ export const createPlan: RequestHandler = async (req, res) => {
   const body = req.body as Record<string, unknown>;
   const description = optionalString(body, 'description');
 
+  const chelavExempt = optionalBool(body, 'chelavExempt');
   const result = await PlanService.createPlan(req.user!.masjidId!, req.user!.id, {
     name: requireString(body, 'name'),
     ...(description !== undefined && { description }),
+    ...(chelavExempt !== undefined && { chelavExempt }),
   });
   sendSuccess(res, result, 'Contribution plan created.', 201);
 };
@@ -70,11 +72,13 @@ export const updatePlan: RequestHandler = async (req, res) => {
 
   const name = optionalString(body, 'name');
   const description = optionalString(body, 'description');
+  const chelavExempt = optionalBool(body, 'chelavExempt');
   const active = optionalBool(body, 'active');
 
   const result = await PlanService.updatePlan(masjidId, planId, req.user!.id, {
     ...(name !== undefined && { name }),
     ...(description !== undefined && { description }),
+    ...(chelavExempt !== undefined && { chelavExempt }),
     ...(active !== undefined && { active }),
   });
   sendSuccess(res, result, 'Contribution plan updated.');
